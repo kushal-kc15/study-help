@@ -1,0 +1,29 @@
+{% extends 'main.html' %}
+{% block content %}
+<main class="auth layout">
+  <div class="container">
+    <div class="layout__box" style="max-width:480px;margin:0 auto;">
+      <div class="layout__boxHeader">
+        <div class="layout__boxTitle">
+          <a href="{% url 'update-user' %}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          </a>
+          <h3 style="color:var(--color-error);">Delete Account</h3>
+        </div>
+      </div>
+      <div class="layout__body" style="text-align:center;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--color-error)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 1.6rem;display:block;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <p style="font-size:1.6rem;font-weight:600;color:var(--color-text);">Are you absolutely sure?</p>
+        <p style="font-size:1.4rem;color:var(--color-text-secondary);margin-top:0.8rem;margin-bottom:2.4rem;">
+          This will permanently delete your account, all your rooms, messages, files, and everything else. This cannot be undone.
+        </p>
+        <form method="POST" style="display:flex;gap:1rem;justify-content:center;">
+          {% csrf_token %}
+          <a href="{% url 'update-user' %}" class="btn btn--dark">Cancel, keep my account</a>
+          <button type="submit" class="btn" style="background:var(--color-error);color:#fff;">Yes, delete my account</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</main>
+{% endblock %}

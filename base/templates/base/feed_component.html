@@ -5,7 +5,7 @@
       <div class="avatar avatar--small">
         <img src="{{room.host.avatar.url}}" alt="{{room.host.username}}" />
       </div>
-      <span>@{{room.host.username}}</span>
+      <span>@{{room.host.username}}{% with top=room.host.get_badges %} {% if top %}{% with b=top|last %}<span title="{{b.desc}}">{{b.emoji}}</span>{% endwith %}{% endif %}{% endwith %}</span>
     </a>
     <div style="display:flex;align-items:center;gap:0.8rem;">
       <span style="font-size:1.2rem;color:var(--color-text-muted);">{{room.created|timesince}} ago</span>

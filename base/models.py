@@ -17,6 +17,46 @@ class User(AbstractUser):
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
+
+    BADGE_DEFINITIONS = [
+        {'id': 'newcomer',    'label': 'Newcomer',     'emoji': '🌱', 'desc': 'Joined StudyHelp',           'color': '#22c55e'},
+        {'id': 'verified',    'label': 'Verified',     'emoji': '✅', 'desc': 'Verified email address',     'color': '#3b82f6'},
+        {'id': 'host',        'label': 'Room Host',    'emoji': '🏠', 'desc': 'Created at least 1 room',    'color': '#8b5cf6'},
+        {'id': 'regular',     'label': 'Regular',      'emoji': '💬', 'desc': 'Sent 10+ messages',          'color': '#f59e0b'},
+        {'id': 'contributor', 'label': 'Contributor',  'emoji': '🔥', 'desc': 'Sent 50+ messages',          'color': '#ef4444'},
+        {'id': 'popular',     'label': 'Popular',      'emoji': '⭐', 'desc': 'Joined 5+ rooms',            'color': '#f97316'},
+        {'id': 'sharer',      'label': 'Sharer',       'emoji': '📎', 'desc': 'Shared at least 1 file',     'color': '#06b6d4'},
+        {'id': 'veteran',     'label': 'Veteran',      'emoji': '🏆', 'desc': 'Created 5+ rooms',           'color': '#eab308'},
+    ]
+
+    def get_badges(self):
+        badges = []
+        msg_count = self.message_set.count()
+        room_count = self.room_set.count()
+        joined_count = self.participants.count()
+        has_files = self.roomfile_set.exists()
+
+        for b in self.BADGE_DEFINITIONS:
+            earned = False
+            if b['id'] == 'newcomer':
+                earned = True
+            elif b['id'] == 'verified':
+                earned = self.is_email_verified
+            elif b['id'] == 'host':
+                earned = room_count >= 1
+            elif b['id'] == 'regular':
+                earned = msg_count >= 10
+            elif b['id'] == 'contributor':
+                earned = msg_count >= 50
+            elif b['id'] == 'popular':
+                earned = joined_count >= 5
+            elif b['id'] == 'sharer':
+                earned = has_files
+            elif b['id'] == 'veteran':
+                earned = room_count >= 5
+            if earned:
+                badges.append(b)
+        return badges
     
 
 class Topic(models.Model):
@@ -32,6 +72,7 @@ class Room(models.Model):
     bookmarked_by=models.ManyToManyField(User,related_name='bookmarked_rooms',blank=True)
     muted_users=models.ManyToManyField(User,related_name='muted_in_rooms',blank=True)
     pinned_message=models.OneToOneField('Message',on_delete=models.SET_NULL,null=True,blank=True,related_name='pinned_in_room')
+    invite_token=models.UUIDField(default=uuid.uuid4,unique=True,editable=False)
     name=models.CharField(max_length=100)
     description=models.TextField(null=True,blank=True)
     participants=models.ManyToManyField(User,related_name='participants',blank=True)

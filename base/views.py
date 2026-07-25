@@ -8,7 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.mail import send_mail
 from django.conf import settings as django_settings
 from .models import Room, Topic, Message, User, Notification, DirectMessage, RoomFile, MessageReaction
-from .forms import RoomForm, UserForm, myusercreationform
+from .forms import RoomForm, UserForm, RegisterForm
 
 
 # Create your views here.
@@ -38,20 +38,17 @@ def logoutpage(request):
     return redirect('home')
 
 def registerpage(request):
-    form = myusercreationform()
+    form = RegisterForm()
     if request.method == 'POST':
-        form = myusercreationform(request.POST)
+        form = RegisterForm(request.POST)
         if form.is_valid():
-            user = form.save(commit=False)
-            user.username = user.username.lower()
+            user = form.save()
             user.is_email_verified = False
-            user.save()
+            user.save(update_fields=['is_email_verified'])
             _send_verification_email(request, user)
             login(request, user)
-            messages.info(request, 'Account created! Please check your email to verify your address.')
+            messages.info(request, f'Welcome, {user.name or user.username}! Check your email to verify your address.')
             return redirect('home')
-        else:
-            messages.error(request, 'An error occurred during registration')
     return render(request, 'base/login_register.html', {'form': form})
 
 
@@ -230,14 +227,26 @@ def UserProfile(request,pk):
     
 @login_required(login_url='login')
 def UpdateUser(request):
-    user=request.user
-    form=UserForm(instance=user)
+    user = request.user
+    form = UserForm(instance=user)
     if request.method == 'POST':
-        form=UserForm(request.POST,request.FILES,instance=user)
+        form = UserForm(request.POST, request.FILES, instance=user)
         if form.is_valid():
             form.save()
-            return redirect('user-profile',pk=user.id)
-    return render(request, 'base/update-user.html',{'form':form})
+            messages.success(request, 'Profile updated successfully.')
+            return redirect('user-profile', pk=user.id)
+    return render(request, 'base/update-user.html', {'form': form})
+
+
+@login_required(login_url='login')
+def delete_account(request):
+    if request.method == 'POST':
+        user = request.user
+        logout(request)
+        user.delete()
+        messages.success(request, 'Your account has been deleted.')
+        return redirect('home')
+    return render(request, 'base/delete_account.html')
 
 def topicspage(request):
     q=request.GET.get('q')if request.GET.get('q')!=None else ''
@@ -290,6 +299,28 @@ def notifications_count(request):
 def online_status(request):
     from .consumers import ONLINE_USERS
     return JsonResponse({'online_users': list(ONLINE_USERS)})
+
+
+def user_badges(request, pk):
+    user = get_object_or_404(User, id=pk)
+    return JsonResponse({'badges': user.get_badges()})
+
+
+def search_room_messages(request, pk):
+    room = get_object_or_404(Room, id=pk)
+    q = request.GET.get('q', '').strip()
+    if not q:
+        return JsonResponse({'results': [], 'count': 0})
+    qs = room.message_set.filter(body__icontains=q).select_related('user')[:50]
+    results = [{
+        'id': m.id,
+        'body': m.body,
+        'username': m.user.username,
+        'avatar_url': m.user.avatar.url if m.user.avatar else '/media/avatar.svg',
+        'user_id': m.user.id,
+        'timesince': m.created.strftime('%b %d, %Y'),
+    } for m in qs]
+    return JsonResponse({'results': results, 'count': len(results)})
 
 
 def room_messages_api(request, pk):
@@ -348,6 +379,29 @@ def toggle_reaction(request, pk):
             counts[e] = c
     user_reactions = list(message.reactions.filter(user=request.user).values_list('emoji', flat=True))
     return JsonResponse({'counts': counts, 'user_reactions': user_reactions})
+
+
+def join_via_invite(request, token):
+    room = get_object_or_404(Room, invite_token=token)
+    if request.user.is_authenticated:
+        room.participants.add(request.user)
+        messages.success(request, f'You joined "{room.name}"!')
+    else:
+        messages.info(request, 'Please log in to join this room.')
+        return redirect(f'/login?next=/invite/{token}/')
+    return redirect('room', pk=room.id)
+
+
+@login_required(login_url='login')
+def regenerate_invite(request, pk):
+    room = get_object_or_404(Room, id=pk)
+    if request.user != room.host:
+        return JsonResponse({'error': 'Not authorized'}, status=403)
+    import uuid
+    room.invite_token = uuid.uuid4()
+    room.save(update_fields=['invite_token'])
+    invite_url = request.build_absolute_uri(f'/invite/{room.invite_token}/')
+    return JsonResponse({'invite_url': invite_url})
 
 
 @login_required(login_url='login')

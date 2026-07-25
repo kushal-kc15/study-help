@@ -26,13 +26,30 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     async def receive(self, text_data):
         data = json.loads(text_data)
-        body = data['body']
         user = self.scope['user']
 
         if user.is_anonymous:
             return
 
-        message = await self.save_message(user, self.room_id, body)
+        event_type = data.get('type', 'message')
+
+        if event_type == 'typing':
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'typing_event',
+                    'username': user.username,
+                    'user_id': user.id,
+                    'is_typing': data.get('is_typing', False),
+                }
+            )
+            return
+
+        body = data.get('body', '')
+        if not body:
+            return
+
+        await self.save_message(user, self.room_id, body)
 
         await self.channel_layer.group_send(
             self.room_group_name,
@@ -48,11 +65,20 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     async def chat_message(self, event):
         await self.send(text_data=json.dumps({
+            'type': 'message',
             'body': event['body'],
             'username': event['username'],
             'avatar_url': event['avatar_url'],
             'user_id': event['user_id'],
             'timestamp': event['timestamp'],
+        }))
+
+    async def typing_event(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'typing',
+            'username': event['username'],
+            'user_id': event['user_id'],
+            'is_typing': event['is_typing'],
         }))
 
     @database_sync_to_async

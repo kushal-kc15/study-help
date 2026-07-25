@@ -9,6 +9,9 @@
         </a>
         <h3>Study Room</h3>
         <div style="margin-left:auto;display:flex;gap:1rem;align-items:center;">
+        <button type="button" id="search-toggle" class="mod-btn" title="Search messages (Ctrl+F)">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </button>
         {% if request.user.is_authenticated %}
         <a href="{% url 'toggle-bookmark' room.id %}"
            class="bookmark-btn {% if request.user in room.bookmarked_by.all %}bookmark-btn--active{% endif %}"
@@ -47,6 +50,19 @@
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
         Files <span class="room-tab__badge">{{room_files.count}}</span>
       </button>
+    </div>
+
+    <!-- Search Panel -->
+    <div id="room-search-bar" class="room-search-bar" style="display:none;">
+      <div class="room-search-bar__inner">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="room-search-input" type="text" placeholder="Search messages..." autocomplete="off" />
+        <span id="search-count" style="font-size:1.2rem;color:var(--color-text-muted);white-space:nowrap;"></span>
+        <button type="button" id="search-close" class="mod-btn">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div id="search-results" class="search-results" style="display:none;"></div>
     </div>
 
     <!-- Chat Panel -->
@@ -106,7 +122,7 @@
                   </a>
                   {% endif %}
                 </div>
-                <div class="thread__details">{{message.body}}</div>
+                <div class="thread__details markdown-body" data-raw="{{message.body|escapejs}}"></div>
                 <div class="reaction-counts" id="reactions-{{message.id}}" data-msg-id="{{message.id}}"></div>
               </div>
             </div>
@@ -122,10 +138,12 @@
           You have been muted in this room.
         </div>
         {% else %}
+        <div id="typing-indicator" class="typing-indicator" style="display:none;"></div>
         <div class="room__message">
           <form id="chat-form">
-            <input id="chat-input" name="body" placeholder="Write your message here..." autocomplete="off" />
+            <input id="chat-input" name="body" placeholder="Message... supports **bold**, `code`, > quote" autocomplete="off" />
           </form>
+          <p style="font-size:1.1rem;color:var(--color-text-muted);margin-top:0.4rem;">Markdown: **bold** _italic_ `code` ```block``` > quote</p>
         </div>
         {% endif %}
       {% endif %}
@@ -184,6 +202,22 @@
 
   <div class="participants">
     <h3 class="participants__top">Participants <span>({{participants.count}} Joined)</span></h3>
+
+    {% if room.host == request.user %}
+    <div class="invite-section">
+      <p class="invite-section__label">Invite link</p>
+      <div class="invite-section__row">
+        <input id="invite-url" type="text" readonly value="{{request.scheme}}://{{request.get_host}}/invite/{{room.invite_token}}/" class="invite-section__input" />
+        <button type="button" class="btn btn--dark btn--pill" id="copy-invite" onclick="copyInviteLink()" title="Copy link">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+        <button type="button" class="btn btn--dark btn--pill" onclick="regenerateInvite('{{room.id}}')" title="Generate new link">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        </button>
+      </div>
+    </div>
+    {% endif %}
+
     <div class="participants__list">
       {% for user in participants %}
       <div class="participant">
@@ -260,8 +294,41 @@
   const chatForm = document.getElementById('chat-form');
   const chatInput = document.getElementById('chat-input');
 
+  if (typeof marked !== 'undefined') marked.setOptions({ breaks: true, gfm: true });
+  const md = (typeof marked !== 'undefined') ? marked.parse : (t => t);
+  const myUserId = "{{request.user.id}}";
+  const typingIndicator = document.getElementById('typing-indicator');
+  const typingUsers = {};
+
+  function updateTypingDisplay() {
+    const names = Object.values(typingUsers);
+    if (names.length === 0) {
+      typingIndicator.style.display = 'none';
+    } else {
+      const text = names.length === 1
+        ? `${names[0]} is typing`
+        : names.length === 2
+          ? `${names[0]} and ${names[1]} are typing`
+          : `${names.length} people are typing`;
+      typingIndicator.style.display = 'flex';
+      typingIndicator.innerHTML = `<span class="typing-dots"><span></span><span></span><span></span></span>${text}...`;
+    }
+  }
+
   chatSocket.onmessage = function(e) {
     const data = JSON.parse(e.data);
+
+    if (data.type === 'typing') {
+      if (String(data.user_id) === String(myUserId)) return;
+      if (data.is_typing) {
+        typingUsers[data.user_id] = data.username;
+      } else {
+        delete typingUsers[data.user_id];
+      }
+      updateTypingDisplay();
+      return;
+    }
+
     chatMessages.insertAdjacentHTML('beforeend', `
       <div class="thread__single">
         <div class="avatar avatar--small"><img src="${data.avatar_url}" alt="${data.username}" /></div>
@@ -270,19 +337,38 @@
             <span class="thread__authorInfo">@${data.username}</span>
             <span class="thread__date">${data.timestamp}</span>
           </div>
-          <div class="thread__details">${data.body}</div>
+          <div class="thread__details markdown-body">${md(data.body)}</div>
         </div>
       </div>
     `);
     document.querySelector('.room__box').scrollTop = document.querySelector('.room__box').scrollHeight;
+    delete typingUsers[data.user_id];
+    updateTypingDisplay();
   };
 
+  let typingTimeout = null;
+  let isTyping = false;
+
   if (chatForm) {
+    chatInput.addEventListener('input', function() {
+      if (!isTyping) {
+        isTyping = true;
+        chatSocket.send(JSON.stringify({ type: 'typing', is_typing: true }));
+      }
+      clearTimeout(typingTimeout);
+      typingTimeout = setTimeout(() => {
+        isTyping = false;
+        chatSocket.send(JSON.stringify({ type: 'typing', is_typing: false }));
+      }, 2000);
+    });
+
     chatForm.addEventListener('submit', function(e) {
       e.preventDefault();
       const body = chatInput.value.trim();
       if (!body) return;
-      chatSocket.send(JSON.stringify({ body }));
+      clearTimeout(typingTimeout);
+      isTyping = false;
+      chatSocket.send(JSON.stringify({ type: 'message', body }));
       chatInput.value = '';
     });
   }
@@ -307,7 +393,7 @@
             <a href="/profile/${msg.user_id}/" class="thread__authorInfo">@${msg.username}</a>
             <span class="thread__date">${msg.timesince}</span>
           </div>
-          <div class="thread__details">${msg.body}</div>
+          <div class="thread__details markdown-body">${md(msg.body)}</div>
           <div class="reaction-counts" id="reactions-${msg.id}" data-msg-id="${msg.id}"></div>
         </div>
       </div>`;
@@ -403,6 +489,128 @@
       sendReaction(msgId, emoji);
     });
   });
+
+  // ---- Room Search ----
+  const searchToggle = document.getElementById('search-toggle');
+  const searchBar = document.getElementById('room-search-bar');
+  const searchInput = document.getElementById('room-search-input');
+  const searchResults = document.getElementById('search-results');
+  const searchCount = document.getElementById('search-count');
+  const searchClose = document.getElementById('search-close');
+
+  function openSearch() {
+    searchBar.style.display = 'block';
+    searchInput.focus();
+  }
+
+  function closeSearch() {
+    searchBar.style.display = 'none';
+    searchInput.value = '';
+    searchResults.style.display = 'none';
+    searchResults.innerHTML = '';
+    searchCount.textContent = '';
+    clearHighlights();
+  }
+
+  function highlight(text, q) {
+    if (!q) return text;
+    const re = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi');
+    return text.replace(re, '<mark>$1</mark>');
+  }
+
+  function clearHighlights() {
+    document.querySelectorAll('#chat-messages mark').forEach(el => {
+      el.outerHTML = el.textContent;
+    });
+  }
+
+  function highlightInChat(q) {
+    clearHighlights();
+    if (!q) return;
+    document.querySelectorAll('#chat-messages .thread__details').forEach(el => {
+      el.innerHTML = highlight(el.innerHTML, q);
+    });
+  }
+
+  let searchDebounce = null;
+  if (searchInput) {
+    searchInput.addEventListener('input', function() {
+      clearTimeout(searchDebounce);
+      const q = this.value.trim();
+      if (!q) {
+        searchResults.style.display = 'none';
+        searchResults.innerHTML = '';
+        searchCount.textContent = '';
+        clearHighlights();
+        return;
+      }
+      searchDebounce = setTimeout(() => {
+        highlightInChat(q);
+        fetch(`/room/{{room.id}}/search/?q=${encodeURIComponent(q)}`)
+          .then(r => r.json())
+          .then(data => {
+            searchCount.textContent = data.count ? `${data.count} result${data.count !== 1 ? 's' : ''}` : 'No results';
+            if (!data.results.length) {
+              searchResults.innerHTML = '<p style="padding:1.2rem;color:var(--color-text-muted);font-size:1.3rem;">No messages found.</p>';
+              searchResults.style.display = 'block';
+              return;
+            }
+            searchResults.innerHTML = data.results.map(m => `
+              <a href="#msg-${m.id}" class="search-result-item" onclick="document.getElementById('msg-${m.id}')?.scrollIntoView({behavior:'smooth',block:'center'})">
+                <div class="avatar avatar--small"><img src="${m.avatar_url}" alt="${m.username}" /></div>
+                <div class="search-result-item__content">
+                  <span class="search-result-item__author">@${m.username}</span>
+                  <span class="search-result-item__date">${m.timesince}</span>
+                  <p class="search-result-item__body">${highlight(m.body, q)}</p>
+                </div>
+              </a>
+            `).join('');
+            searchResults.style.display = 'block';
+          });
+      }, 300);
+    });
+  }
+
+  if (searchToggle) searchToggle.addEventListener('click', openSearch);
+  if (searchClose) searchClose.addEventListener('click', closeSearch);
+
+  document.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'f' && document.getElementById('panel-chat') && !document.getElementById('panel-chat').classList.contains('room-panel--hidden')) {
+      e.preventDefault();
+      openSearch();
+    }
+    if (e.key === 'Escape' && searchBar && searchBar.style.display !== 'none') {
+      closeSearch();
+    }
+  });
+
+  // ---- Invite Link ----
+  function copyInviteLink() {
+    const input = document.getElementById('invite-url');
+    const btn = document.getElementById('copy-invite');
+    navigator.clipboard.writeText(input.value).then(() => {
+      const orig = btn.innerHTML;
+      btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+      setTimeout(() => btn.innerHTML = orig, 2000);
+    }).catch(() => {
+      input.select();
+      document.execCommand('copy');
+    });
+  }
+
+  function regenerateInvite(roomId) {
+    if (!confirm('Generate a new invite link? The old link will stop working.')) return;
+    fetch(`/room/${roomId}/regenerate-invite/`, {
+      method: 'POST',
+      headers: {'X-CSRFToken': csrfToken}
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.invite_url) {
+        document.getElementById('invite-url').value = data.invite_url;
+      }
+    });
+  }
 
   // ---- Moderation ----
   function muteUser(roomId, userId, btn) {

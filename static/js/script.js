@@ -1,3 +1,12 @@
+// Markdown rendering for server-rendered messages
+document.addEventListener('DOMContentLoaded', function () {
+  if (typeof marked === 'undefined') return;
+  marked.setOptions({ breaks: true, gfm: true });
+  document.querySelectorAll('[data-raw]').forEach(el => {
+    el.innerHTML = marked.parse(el.dataset.raw);
+  });
+});
+
 // Dark Mode
 (function () {
   const html = document.documentElement;

@@ -22,6 +22,18 @@
         Message
       </a>
       {% endif %}
+
+      {% with badges=user.get_badges %}
+      {% if badges %}
+      <div class="profile-badges">
+        {% for badge in badges %}
+        <span class="badge-chip" style="--badge-color:{{badge.color}};" title="{{badge.desc}}">
+          {{badge.emoji}} {{badge.label}}
+        </span>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% endwith %}
     </div>
 
     <div class="profile-page__stats">

@@ -41,7 +41,7 @@
             <div class="avatar avatar--medium active">
               <img src="{{request.user.avatar.url}}" alt="{{request.user.username}}" />
             </div>
-            <p>{{request.user.username}}<span>@{{request.user.username}}</span></p>
+            <p>{{request.user.name|default:request.user.username}}<span>@{{request.user.username}}</span></p>
           </a>
           <button class="dropdown-button">
             <svg
@@ -57,11 +57,9 @@
           </button>
         </div>
         {% else %}
-         <!-- Not Logged In -->
-        <a href="{% url 'login' %}">
-          <img src="{% static 'images/avatar.svg' %}" alt="Login" />
-          <p>Login</p>
-        </a>
+        <!-- Not Logged In -->
+        <a href="{% url 'login' %}" class="btn btn--dark btn--pill">Sign In</a>
+        <a href="{% url 'register' %}" class="btn btn--main btn--pill">Sign Up</a>
         {% endif %}
 
         {% if request.user.is_authenticated %}

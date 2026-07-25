@@ -38,7 +38,7 @@
     <div class="dm-messages" id="dm-messages">
       {% for msg in messages %}
       <div class="dm-bubble {% if msg.sender == request.user %}dm-bubble--mine{% else %}dm-bubble--theirs{% endif %}">
-        <div class="dm-bubble__body">{{msg.body}}</div>
+        <div class="dm-bubble__body markdown-body" data-raw="{{msg.body|escapejs}}"></div>
         <span class="dm-bubble__time">{{msg.created|timesince}} ago</span>
       </div>
       {% empty %}
@@ -80,7 +80,7 @@
     const bubble = document.createElement('div');
     bubble.className = `dm-bubble ${isMine ? 'dm-bubble--mine' : 'dm-bubble--theirs'}`;
     bubble.innerHTML = `
-      <div class="dm-bubble__body">${data.body}</div>
+      <div class="dm-bubble__body markdown-body">${(typeof marked !== 'undefined' ? marked.parse(data.body) : data.body)}</div>
       <span class="dm-bubble__time">${data.timestamp}</span>
     `;
     dmMessages.appendChild(bubble);

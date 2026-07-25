@@ -1,12 +1,16 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.core.validators import FileExtensionValidator
 
-# Create your models here.
 class User(AbstractUser):
     name=models.CharField(max_length=100,null=True)
     email=models.EmailField(unique=True,max_length=100)
     bio=models.TextField(null=True)
-    avatar=models.ImageField(null=True,default="avatar.svg")
+    avatar=models.ImageField(
+        null=True,
+        default="avatar.svg",
+        validators=[FileExtensionValidator(allowed_extensions=['jpg', 'jpeg', 'png', 'gif', 'webp'])],
+    )
     
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []

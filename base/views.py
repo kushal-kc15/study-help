@@ -1,10 +1,10 @@
-from django.shortcuts import render,redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpResponse
-from . models import Room,Topic,Message,User
-from . forms import RoomForm,UserForm,myusercreationform
+from .models import Room, Topic, Message, User
+from .forms import RoomForm, UserForm, myusercreationform
 from django.db.models import Q
 from django.contrib import messages
-from django.contrib.auth import authenticate,login,logout
+from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 
 
@@ -27,6 +27,9 @@ def loginpage(request):
     context={'page':page}
     return render(request, 'base/login_register.html',context)
 
+from django.views.decorators.http import require_POST
+
+@require_POST
 def logoutpage(request):
     logout(request)
     return redirect('home')
@@ -61,7 +64,7 @@ def home(request):
     return render(request, 'base/home.html',context)
 
 def room(request,pk):
-    room=Room.objects.get(id=pk)
+    room=get_object_or_404(Room, id=pk)
     room_messages=room.message_set.all()
     participants=room.participants.all()
     if request.method=='POST':
@@ -94,7 +97,7 @@ def CreateRoom(request):
     return render(request, 'base/room_form.html',context)
 @login_required(login_url='login')
 def UpdateRoom(request,pk):
-    room=Room.objects.get(id=pk)
+    room=get_object_or_404(Room, id=pk)
     topics=Topic.objects.all()
     form=RoomForm(instance=room)
     if request.user!=room.host :
@@ -111,7 +114,7 @@ def UpdateRoom(request,pk):
     return render(request, 'base/room_form.html',context)
 @login_required(login_url='login')
 def DeleteRoom(request,pk):
-    room=Room.objects.get(id=pk)
+    room=get_object_or_404(Room, id=pk)
     if request.user!=room.host :
         return HttpResponse('You are not authorized to delete this room')
     if request.method == 'POST':
@@ -121,7 +124,7 @@ def DeleteRoom(request,pk):
 
 @login_required(login_url='login')
 def DeleteMessage(request,pk):
-    message=Message.objects.get(id=pk)
+    message=get_object_or_404(Message, id=pk)
     if request.user!=message.user :
         return HttpResponse('You are not authorized to delete this room')
     
@@ -131,7 +134,7 @@ def DeleteMessage(request,pk):
     return render(request, 'base/delete.html',{'obj':message})
 
 def UserProfile(request,pk):
-    user=User.objects.get(id=pk)
+    user=get_object_or_404(User, id=pk)
     rooms=user.room_set.all()
     room_messages=user.message_set.all()
     topics=Topic.objects.all()

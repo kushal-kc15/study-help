@@ -42,7 +42,24 @@
             </a>
           </div>
           {% include 'base/feed_component.html' %}
-         
+
+          {% if page_obj.has_other_pages %}
+          <div class="pagination">
+            {% if page_obj.has_previous %}
+            <a href="?{% if request.GET.q %}q={{request.GET.q}}&{% endif %}page={{page_obj.previous_page_number}}" class="pagination__btn">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              Prev
+            </a>
+            {% endif %}
+            <span class="pagination__info">Page {{page_obj.number}} of {{page_obj.paginator.num_pages}}</span>
+            {% if page_obj.has_next %}
+            <a href="?{% if request.GET.q %}q={{request.GET.q}}&{% endif %}page={{page_obj.next_page_number}}" class="pagination__btn">
+              Next
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </a>
+            {% endif %}
+          </div>
+          {% endif %}
         </div>
         <!-- Room List End -->
 

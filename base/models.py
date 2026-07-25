@@ -1,3 +1,4 @@
+import uuid
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import FileExtensionValidator
@@ -11,7 +12,9 @@ class User(AbstractUser):
         default="avatar.svg",
         validators=[FileExtensionValidator(allowed_extensions=['jpg', 'jpeg', 'png', 'gif', 'webp'])],
     )
-    
+    is_email_verified = models.BooleanField(default=False)
+    email_verification_token = models.UUIDField(default=uuid.uuid4, unique=True)
+
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
     
@@ -26,6 +29,9 @@ class Room(models.Model):
     host = models.ForeignKey(User,on_delete=models.SET_NULL,null=True)
     topic=models.ForeignKey(Topic,on_delete=models.SET_NULL,null=True,blank=True)
     tags=models.ManyToManyField(Topic,related_name='tagged_rooms',blank=True)
+    bookmarked_by=models.ManyToManyField(User,related_name='bookmarked_rooms',blank=True)
+    muted_users=models.ManyToManyField(User,related_name='muted_in_rooms',blank=True)
+    pinned_message=models.OneToOneField('Message',on_delete=models.SET_NULL,null=True,blank=True,related_name='pinned_in_room')
     name=models.CharField(max_length=100)
     description=models.TextField(null=True,blank=True)
     participants=models.ManyToManyField(User,related_name='participants',blank=True)
@@ -76,6 +82,19 @@ class RoomFile(models.Model):
 
     def __str__(self):
         return self.original_name
+
+
+class MessageReaction(models.Model):
+    EMOJIS = ['👍', '❤️', '😂', '🔥', '👀', '🎉']
+    message = models.ForeignKey('Message', on_delete=models.CASCADE, related_name='reactions')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    emoji = models.CharField(max_length=10)
+
+    class Meta:
+        unique_together = ('message', 'user', 'emoji')
+
+    def __str__(self):
+        return f"{self.user.username} {self.emoji} on msg {self.message.id}"
 
 
 class DirectMessage(models.Model):

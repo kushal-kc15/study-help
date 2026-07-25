@@ -8,6 +8,14 @@
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
         </a>
         <h3>Study Room</h3>
+        <div style="margin-left:auto;display:flex;gap:1rem;align-items:center;">
+        {% if request.user.is_authenticated %}
+        <a href="{% url 'toggle-bookmark' room.id %}"
+           class="bookmark-btn {% if request.user in room.bookmarked_by.all %}bookmark-btn--active{% endif %}"
+           title="{% if request.user in room.bookmarked_by.all %}Remove bookmark{% else %}Bookmark room{% endif %}">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="{% if request.user in room.bookmarked_by.all %}currentColor{% else %}none{% endif %}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+        </a>
+        {% endif %}
         {% if room.host == request.user %}
         <div style="margin-left:auto;display:flex;gap:1rem;">
           <a href="{% url 'update-room' room.id %}">
@@ -18,8 +26,16 @@
           </a>
         </div>
         {% endif %}
+        </div>
       </div>
     </div>
+
+    {% if room.pinned_message %}
+    <div class="pinned-banner">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>
+      <strong>Pinned:</strong> {{room.pinned_message.body|truncatewords:20}}
+    </div>
+    {% endif %}
 
     <!-- Tabs -->
     <div class="room-tabs">
@@ -55,9 +71,11 @@
         </div>
 
         <div class="thread" style="margin-top:2.4rem;padding-top:2rem;border-top:1px solid var(--color-border-light);">
+          <div id="load-more-sentinel" style="height:1px;"></div>
+          <div id="loading-indicator" style="text-align:center;padding:1rem;color:var(--color-text-muted);font-size:1.3rem;display:none;">Loading older messages...</div>
           <div class="thread__list" id="chat-messages">
             {% for message in room_messages %}
-            <div class="thread__single">
+            <div class="thread__single" id="msg-{{message.id}}">
               <div class="avatar avatar--small">
                 <img src="{{message.user.avatar.url}}" alt="{{message.user.username}}" />
               </div>
@@ -65,6 +83,23 @@
                 <div class="thread__author">
                   <a href="{% url 'user-profile' message.user.id %}" class="thread__authorInfo">@{{message.user.username}}</a>
                   <span class="thread__date">{{message.created|timesince}} ago</span>
+                  {% if request.user.is_authenticated %}
+                  <div class="reaction-picker" data-msg-id="{{message.id}}">
+                    <button class="reaction-picker__trigger" type="button" title="Add reaction">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+                    </button>
+                    <div class="reaction-picker__menu">
+                      {% for emoji in emojis %}<button class="reaction-emoji" type="button" data-emoji="{{emoji}}" data-msg-id="{{message.id}}">{{emoji}}</button>{% endfor %}
+                    </div>
+                  </div>
+                  {% endif %}
+                  {% if room.host == request.user %}
+                  <button class="mod-btn" type="button" title="Pin message"
+                    onclick="pinMessage('{{room.id}}','{{message.id}}')"
+                    style="{% if room.pinned_message.id == message.id %}color:var(--color-primary);{% endif %}">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>
+                  </button>
+                  {% endif %}
                   {% if request.user == message.user %}
                   <a href="{% url 'delete-message' message.id %}" class="thread__delete">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -72,6 +107,7 @@
                   {% endif %}
                 </div>
                 <div class="thread__details">{{message.body}}</div>
+                <div class="reaction-counts" id="reactions-{{message.id}}" data-msg-id="{{message.id}}"></div>
               </div>
             </div>
             {% endfor %}
@@ -80,11 +116,18 @@
       </div>
 
       {% if request.user.is_authenticated %}
-      <div class="room__message">
-        <form id="chat-form">
-          <input id="chat-input" name="body" placeholder="Write your message here..." autocomplete="off" />
-        </form>
-      </div>
+        {% if is_muted %}
+        <div class="muted-notice">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          You have been muted in this room.
+        </div>
+        {% else %}
+        <div class="room__message">
+          <form id="chat-form">
+            <input id="chat-input" name="body" placeholder="Write your message here..." autocomplete="off" />
+          </form>
+        </div>
+        {% endif %}
       {% endif %}
     </div>
 
@@ -143,18 +186,36 @@
     <h3 class="participants__top">Participants <span>({{participants.count}} Joined)</span></h3>
     <div class="participants__list">
       {% for user in participants %}
-      <a href="{% url 'user-profile' user.id %}" class="participant">
-        <div class="avatar-wrapper" data-user-id="{{user.id}}">
-          <div class="avatar avatar--medium">
-            <img src="{{user.avatar.url}}" alt="{{user.username}}" />
+      <div class="participant">
+        <a href="{% url 'user-profile' user.id %}" style="display:flex;align-items:center;gap:1rem;flex:1;">
+          <div class="avatar-wrapper" data-user-id="{{user.id}}">
+            <div class="avatar avatar--medium">
+              <img src="{{user.avatar.url}}" alt="{{user.username}}" />
+            </div>
+            <span class="online-dot"></span>
           </div>
-          <span class="online-dot"></span>
+          <p>
+            {{user.username}}
+            <span>@{{user.username}}{% if room.muted_users.all|dictsort:"id" %} {% for mu in room.muted_users.all %}{% if mu.id == user.id %} · muted{% endif %}{% endfor %}{% endif %}</span>
+          </p>
+        </a>
+        {% if room.host == request.user and user != request.user %}
+        <div class="mod-controls">
+          <button class="mod-btn" type="button" title="{% if user in room.muted_users.all %}Unmute{% else %}Mute{% endif %}"
+            onclick="muteUser('{{room.id}}','{{user.id}}',this)">
+            {% if user in room.muted_users.all %}
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+            {% else %}
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+            {% endif %}
+          </button>
+          <button class="mod-btn mod-btn--danger" type="button" title="Kick"
+            onclick="kickUser('{{room.id}}','{{user.id}}')">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          </button>
         </div>
-        <p>
-          {{user.username}}
-          <span>@{{user.username}}</span>
-        </p>
-      </a>
+        {% endif %}
+      </div>
       {% endfor %}
     </div>
   </div>
@@ -223,6 +284,179 @@
       if (!body) return;
       chatSocket.send(JSON.stringify({ body }));
       chatInput.value = '';
+    });
+  }
+
+  // ---- Infinite Scroll (load older messages) ----
+  let loadingMore = false;
+  let hasMore = chatMessages.children.length >= 20;
+  const sentinel = document.getElementById('load-more-sentinel');
+  const loadingIndicator = document.getElementById('loading-indicator');
+
+  function getOldestMsgId() {
+    const first = chatMessages.querySelector('.thread__single');
+    return first ? first.id.replace('msg-', '') : null;
+  }
+
+  function buildMessageHtml(msg) {
+    return `
+      <div class="thread__single" id="msg-${msg.id}">
+        <div class="avatar avatar--small"><img src="${msg.avatar_url}" alt="${msg.username}" /></div>
+        <div style="flex:1;">
+          <div class="thread__author">
+            <a href="/profile/${msg.user_id}/" class="thread__authorInfo">@${msg.username}</a>
+            <span class="thread__date">${msg.timesince}</span>
+          </div>
+          <div class="thread__details">${msg.body}</div>
+          <div class="reaction-counts" id="reactions-${msg.id}" data-msg-id="${msg.id}"></div>
+        </div>
+      </div>`;
+  }
+
+  function loadOlderMessages() {
+    if (loadingMore || !hasMore) return;
+    const beforeId = getOldestMsgId();
+    if (!beforeId) return;
+    loadingMore = true;
+    loadingIndicator.style.display = 'block';
+    const roomBox = document.querySelector('.room__box');
+    const prevScrollHeight = roomBox.scrollHeight;
+
+    fetch(`/room/{{room.id}}/messages/?before=${beforeId}`)
+      .then(r => r.json())
+      .then(data => {
+        hasMore = data.has_more;
+        data.messages.reverse().forEach(msg => {
+          chatMessages.insertAdjacentHTML('afterbegin', buildMessageHtml(msg));
+        });
+        roomBox.scrollTop = roomBox.scrollHeight - prevScrollHeight;
+        loadingIndicator.style.display = 'none';
+        loadingMore = false;
+      });
+  }
+
+  if (sentinel) {
+    const observer = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) loadOlderMessages();
+    }, { root: document.querySelector('.room__box'), threshold: 0.1 });
+    observer.observe(sentinel);
+  }
+
+  // ---- Reactions ----
+  const csrfToken = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+
+  function renderReactions(msgId, counts, userReactions) {
+    const container = document.getElementById('reactions-' + msgId);
+    if (!container) return;
+    container.innerHTML = '';
+    Object.entries(counts).forEach(([emoji, count]) => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'reaction-chip' + (userReactions.includes(emoji) ? ' reaction-chip--mine' : '');
+      chip.textContent = emoji + ' ' + count;
+      chip.addEventListener('click', () => sendReaction(msgId, emoji));
+      container.appendChild(chip);
+    });
+  }
+
+  function sendReaction(msgId, emoji) {
+    fetch(`/message/${msgId}/react/`, {
+      method: 'POST',
+      headers: {'X-CSRFToken': csrfToken, 'Content-Type': 'application/x-www-form-urlencoded'},
+      body: `emoji=${encodeURIComponent(emoji)}`
+    })
+    .then(r => r.json())
+    .then(data => renderReactions(msgId, data.counts, data.user_reactions));
+  }
+
+  // Load existing reactions on page load
+  fetch(`/room/{{room.id}}/reactions/`)
+    .then(r => r.json())
+    .then(data => {
+      Object.entries(data.reactions).forEach(([msgId, info]) => {
+        renderReactions(msgId, info.counts, info.user_reactions);
+      });
+    });
+
+  // Reaction picker toggle
+  document.addEventListener('click', function(e) {
+    const trigger = e.target.closest('.reaction-picker__trigger');
+    const menu = e.target.closest('.reaction-picker__menu');
+    if (trigger) {
+      const pickerMenu = trigger.nextElementSibling;
+      document.querySelectorAll('.reaction-picker__menu.show').forEach(m => {
+        if (m !== pickerMenu) m.classList.remove('show');
+      });
+      pickerMenu.classList.toggle('show');
+      return;
+    }
+    if (!menu) {
+      document.querySelectorAll('.reaction-picker__menu.show').forEach(m => m.classList.remove('show'));
+    }
+  });
+
+  document.querySelectorAll('.reaction-emoji').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const msgId = this.dataset.msgId;
+      const emoji = this.dataset.emoji;
+      this.closest('.reaction-picker__menu').classList.remove('show');
+      sendReaction(msgId, emoji);
+    });
+  });
+
+  // ---- Moderation ----
+  function muteUser(roomId, userId, btn) {
+    fetch(`/room/${roomId}/mute/${userId}/`, {
+      method: 'POST',
+      headers: {'X-CSRFToken': csrfToken}
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.muted) {
+        btn.title = 'Unmute';
+        btn.querySelector('svg').style.stroke = 'var(--color-warning)';
+      } else {
+        btn.title = 'Mute';
+        btn.querySelector('svg').style.stroke = 'currentColor';
+      }
+    });
+  }
+
+  function kickUser(roomId, userId) {
+    if (!confirm('Remove this participant from the room?')) return;
+    fetch(`/room/${roomId}/kick/${userId}/`, {
+      method: 'POST',
+      headers: {'X-CSRFToken': csrfToken}
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.kicked) {
+        const row = document.querySelector(`[data-user-id="${userId}"]`)?.closest('.participant');
+        if (row) row.remove();
+      }
+    });
+  }
+
+  function pinMessage(roomId, msgId) {
+    fetch(`/room/${roomId}/pin/${msgId}/`, {
+      method: 'POST',
+      headers: {'X-CSRFToken': csrfToken}
+    })
+    .then(r => r.json())
+    .then(data => {
+      const banner = document.querySelector('.pinned-banner');
+      if (data.pinned) {
+        if (banner) {
+          banner.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg><strong>Pinned:</strong> ${data.body}`;
+        } else {
+          const div = document.createElement('div');
+          div.className = 'pinned-banner';
+          div.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg><strong>Pinned:</strong> ${data.body}`;
+          document.querySelector('.room-tabs').insertAdjacentElement('beforebegin', div);
+        }
+      } else if (banner) {
+        banner.remove();
+      }
     });
   }
 </script>

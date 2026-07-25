@@ -1,48 +1,75 @@
 {% extends 'main.html' %}
 {% block content %}
-  <main class="profile-page layout layout--3">
-    <div class="container">
-      <!-- Topics Start -->
-      {% include 'base/topic_component.html' %}
-      <!-- Topics End -->
-
-      <!-- Room List Start -->
-       
-      <div class="roomList">
-        <div class="profile">
-          <div class="profile__avatar">
-            <div class="avatar avatar--large active">
-              <img src="{{user.avatar.url}}" />
-            </div>
-          </div>
-          <div class="profile__info">
-            <h3>{{user.username}}</h3>
-            <p>@{{user.username}}</p>
-            {% if request.user == user %}
-            <a href="{% url 'update-user' %}" class="btn btn--main btn--pill">Edit Profile</a>
-            {% endif %}
-          </div>
-          <div class="profile__about">
-            <h3>About</h3>
-            <p>
-              {{user.bio}}
-            </p>
-          </div>
+<div class="profile-page">
+  <div class="profile-page__header">
+    <div class="profile-page__card">
+      <div class="avatar-wrapper" data-user-id="{{user.id}}" style="justify-content:center;margin-bottom:1.6rem;">
+        <div class="avatar avatar--large">
+          <img src="{{user.avatar.url}}" alt="{{user.username}}" />
         </div>
-
-        <div class="roomList__header">
-          <div>
-            <h2>Study Rooms Hosted by {{user.username}}</a>
-            </h2>
-          </div>
-        </div>
-        {% include 'base/feed_component.html' %}
+        <span class="online-dot" style="width:1.4rem;height:1.4rem;bottom:4px;right:4px;"></span>
       </div>
-      <!-- Room List End -->
-
-      <!-- Activities Start -->
-      {% include 'base/activity_component.html' %}
-      <!-- Activities End -->
+      <h2>{{user.name|default:user.username}}</h2>
+      <p class="profile-page__handle">@{{user.username}}</p>
+      {% if user.bio %}
+      <p class="profile-page__bio">{{user.bio}}</p>
+      {% endif %}
+      {% if request.user == user %}
+      <a href="{% url 'update-user' %}" class="btn btn--dark btn--pill" style="margin-top:1.6rem;">Edit Profile</a>
+      {% elif request.user.is_authenticated %}
+      <a href="{% url 'dm' user.id %}" class="btn btn--main btn--pill" style="margin-top:1.6rem;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Message
+      </a>
+      {% endif %}
     </div>
-  </main>
+
+    <div class="profile-page__stats">
+      <div class="stat-card">
+        <span class="stat-card__number">{{rooms.count}}</span>
+        <span class="stat-card__label">Rooms Created</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-card__number">{{room_messages.count}}</span>
+        <span class="stat-card__label">Messages Sent</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-card__number">{{user.participants.count}}</span>
+        <span class="stat-card__label">Rooms Joined</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-card__number">{{user.date_joined|timesince}}</span>
+        <span class="stat-card__label">Member Since</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="profile-page__content">
+    <div class="profile-page__rooms">
+      <h3>Rooms by {{user.username}}</h3>
+      {% if rooms %}
+        {% include 'base/feed_component.html' %}
+      {% else %}
+        <p style="color:var(--color-text-muted);padding:2rem 0;">No rooms created yet.</p>
+      {% endif %}
+    </div>
+
+    <div class="profile-page__activity">
+      <h3>Recent Activity</h3>
+      {% if room_messages %}
+        {% for message in room_messages|slice:":10" %}
+        <div class="profile-activity-item">
+          <div class="profile-activity-item__content">
+            <p>Replied in <a href="{% url 'room' message.room.id %}">{{message.room.name}}</a></p>
+            <span>{{message.created|timesince}} ago</span>
+          </div>
+          <div class="profile-activity-item__body">{{message.body|truncatewords:20}}</div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p style="color:var(--color-text-muted);padding:2rem 0;">No activity yet.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
 {% endblock %}

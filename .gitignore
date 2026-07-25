@@ -23,6 +23,7 @@ staticfiles/
 
 # Media uploads
 media/
+media/room_files/
 
 # IDE
 .vscode/

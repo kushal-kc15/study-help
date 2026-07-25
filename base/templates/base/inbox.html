@@ -1,0 +1,47 @@
+{% extends 'main.html' %}
+{% block content %}
+<div class="dm-layout">
+  <div class="dm-sidebar">
+    <div class="dm-sidebar__header">
+      <h2>Messages</h2>
+    </div>
+    <div class="dm-sidebar__list">
+      {% if conversations %}
+        {% for conv in conversations %}
+        <a href="{% url 'dm' conv.partner.id %}" class="dm-conversation-item">
+          <div class="avatar-wrapper" data-user-id="{{conv.partner.id}}">
+            <div class="avatar avatar--medium">
+              <img src="{{conv.partner.avatar.url}}" alt="{{conv.partner.username}}" />
+            </div>
+            <span class="online-dot"></span>
+          </div>
+          <div class="dm-conversation-item__info">
+            <div class="dm-conversation-item__top">
+              <span class="dm-conversation-item__name">{{conv.partner.name|default:conv.partner.username}}</span>
+              {% if conv.last_msg %}
+              <span class="dm-conversation-item__time">{{conv.last_msg.created|timesince}} ago</span>
+              {% endif %}
+            </div>
+            {% if conv.last_msg %}
+            <p class="dm-conversation-item__preview">{{conv.last_msg.body|truncatechars:50}}</p>
+            {% endif %}
+          </div>
+          {% if conv.unread > 0 %}
+          <span class="notification-badge" style="position:static;margin-left:auto;">{{conv.unread}}</span>
+          {% endif %}
+        </a>
+        {% endfor %}
+      {% else %}
+      <div class="dm-empty">
+        <p>No conversations yet.</p>
+        <p>Visit a user's profile to start a conversation.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="dm-main dm-main--empty">
+    <p>Select a conversation to start messaging</p>
+  </div>
+</div>
+{% endblock %}

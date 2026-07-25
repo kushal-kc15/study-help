@@ -1,0 +1,98 @@
+{% extends 'main.html' %}
+{% block content %}
+<div class="dm-layout">
+  <div class="dm-sidebar">
+    <div class="dm-sidebar__header">
+      <a href="{% url 'inbox' %}">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      </a>
+      <h2>Messages</h2>
+    </div>
+    <div class="dm-sidebar__list">
+      <a href="{% url 'dm' other.id %}" class="dm-conversation-item dm-conversation-item--active">
+        <div class="avatar avatar--medium">
+          <img src="{{other.avatar.url}}" alt="{{other.username}}" />
+        </div>
+        <div class="dm-conversation-item__info">
+          <span class="dm-conversation-item__name">{{other.name|default:other.username}}</span>
+          <p style="font-size:1.2rem;color:var(--color-text-muted);">@{{other.username}}</p>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <div class="dm-main">
+    <div class="dm-main__header">
+      <div class="avatar-wrapper" data-user-id="{{other.id}}">
+        <div class="avatar avatar--small">
+          <img src="{{other.avatar.url}}" alt="{{other.username}}" />
+        </div>
+        <span class="online-dot"></span>
+      </div>
+      <div>
+        <strong>{{other.name|default:other.username}}</strong>
+        <a href="{% url 'user-profile' other.id %}" style="font-size:1.2rem;display:block;color:var(--color-text-muted);">View profile</a>
+      </div>
+    </div>
+
+    <div class="dm-messages" id="dm-messages">
+      {% for msg in messages %}
+      <div class="dm-bubble {% if msg.sender == request.user %}dm-bubble--mine{% else %}dm-bubble--theirs{% endif %}">
+        <div class="dm-bubble__body">{{msg.body}}</div>
+        <span class="dm-bubble__time">{{msg.created|timesince}} ago</span>
+      </div>
+      {% empty %}
+      <div class="dm-empty" style="margin:auto;">
+        <p>No messages yet. Say hello!</p>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="dm-input">
+      <form id="dm-form">
+        <input id="dm-input-field" type="text" placeholder="Write a message..." autocomplete="off" />
+        <button type="submit" class="btn btn--main">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  const otherId = "{{other.id}}";
+  const myId = "{{request.user.id}}";
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+  const dmSocket = new WebSocket(wsProtocol + window.location.host + '/ws/dm/' + otherId + '/');
+
+  const dmMessages = document.getElementById('dm-messages');
+  const dmForm = document.getElementById('dm-form');
+  const dmInput = document.getElementById('dm-input-field');
+
+  function scrollBottom() {
+    dmMessages.scrollTop = dmMessages.scrollHeight;
+  }
+  scrollBottom();
+
+  dmSocket.onmessage = function(e) {
+    const data = JSON.parse(e.data);
+    const isMine = String(data.sender_id) === String(myId);
+    const bubble = document.createElement('div');
+    bubble.className = `dm-bubble ${isMine ? 'dm-bubble--mine' : 'dm-bubble--theirs'}`;
+    bubble.innerHTML = `
+      <div class="dm-bubble__body">${data.body}</div>
+      <span class="dm-bubble__time">${data.timestamp}</span>
+    `;
+    dmMessages.appendChild(bubble);
+    scrollBottom();
+  };
+
+  dmForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const body = dmInput.value.trim();
+    if (!body) return;
+    dmSocket.send(JSON.stringify({ body }));
+    dmInput.value = '';
+  });
+</script>
+{% endblock %}

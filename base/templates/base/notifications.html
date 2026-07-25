@@ -1,0 +1,29 @@
+{% extends 'main.html' %}
+{% block content %}
+<div class="notifications-page">
+  <h2 style="font-size:2rem;font-weight:700;margin-bottom:2rem;">Notifications</h2>
+
+  {% if notifications %}
+    {% for notification in notifications %}
+    <div class="notification-item {% if not notification.is_read %}notification-item--unread{% endif %}">
+      {% if notification.sender %}
+      <div class="avatar avatar--small">
+        <img src="{{notification.sender.avatar.url}}" alt="{{notification.sender.username}}" />
+      </div>
+      {% endif %}
+      <div class="notification-item__content">
+        <p>{{notification.message}}</p>
+        <span>{{notification.created|timesince}} ago</span>
+      </div>
+      {% if notification.room %}
+      <a href="{% url 'room' notification.room.id %}" class="btn btn--dark btn--pill" style="flex-shrink:0;">View</a>
+      {% endif %}
+    </div>
+    {% endfor %}
+  {% else %}
+    <div style="text-align:center;padding:4rem 0;color:var(--color-text-muted);">
+      <p>No notifications yet.</p>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

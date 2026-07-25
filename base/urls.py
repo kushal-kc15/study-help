@@ -15,4 +15,11 @@ urlpatterns = [
     path('update-user/',views.UpdateUser,name='update-user'),
     path('topics/',views.topicspage,name='topics'),
     path('activity/',views.activitypage,name='activity'),
+    path('online-status/',views.online_status,name='online-status'),
+    path('notifications/',views.notifications_page,name='notifications'),
+    path('notifications/count/',views.notifications_count,name='notifications-count'),
+    path('inbox/',views.inbox,name='inbox'),
+    path('dm/<str:user_id>/',views.dm_conversation,name='dm'),
+    path('room/<str:pk>/upload/',views.upload_room_file,name='upload-room-file'),
+    path('file/<str:pk>/delete/',views.delete_room_file,name='delete-room-file'),
 ]

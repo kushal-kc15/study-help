@@ -6,7 +6,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="shortcut icon" href="{% static 'images/favicon.ico' %}" type="image/x-icon" />
-    <link rel="stylesheet" href="{% static 'css/style.css' %}" />
+    <link rel="stylesheet" href="{% static 'css/style.css' %}?v=3" />
     <script>
       (function(){var t=localStorage.getItem('theme'),p=window.matchMedia('(prefers-color-scheme: dark)').matches;if(t==='dark'||(t===null&&p))document.documentElement.setAttribute('data-theme','dark');})();
     </script>
@@ -34,10 +34,23 @@
     </div>
     {% endif %}
 
+    {% block back_nav %}
+    {% if request.resolver_match.url_name != 'home' %}
+    <div class="back-nav">
+      <div class="container">
+        <a href="javascript:history.back()" class="back-nav__link">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          Back
+        </a>
+      </div>
+    </div>
+    {% endif %}
+    {% endblock %}
+
     {% block content %} {% endblock %}
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="{% static 'js/script.js' %}"></script>
+    <script src="{% static 'js/script.js' %}?v=3"></script>
     {% if request.user.is_authenticated %}
     <script src="{% static 'js/presence.js' %}"></script>
     {% endif %}

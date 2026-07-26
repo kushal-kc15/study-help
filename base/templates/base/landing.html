@@ -1,0 +1,99 @@
+{% extends 'main.html' %}
+{% load static %}
+{% block back_nav %}{% endblock %}
+{% block content %}
+
+<div class="lnd">
+
+  <!-- Split intro -->
+  <div class="lnd__split container">
+    <div class="lnd__left">
+      <h1 class="lnd__title">Study<br>rooms<br><span>that work.</span></h1>
+      <p class="lnd__p">Not another forum. Not another Discord server.<br>Just focused rooms where people actually study.</p>
+      <a href="{% url 'register' %}" class="lnd__cta">Join now — it's free</a>
+    </div>
+    <div class="lnd__right">
+      <div class="lnd__mock">
+        <div class="lnd__mock-header">
+          <div class="lnd__mock-circle"></div>
+          <div class="lnd__mock-info">
+            <strong>{% if featured_rooms %}{{ featured_rooms.0.name }}{% else %}Study Room{% endif %}</strong>
+            <span>{{ total_rooms }} rooms live</span>
+          </div>
+        </div>
+        <div class="lnd__mock-body">
+          <div class="lnd__msg lnd__msg--other">
+            <div class="lnd__msg-avatar">A</div>
+            <div class="lnd__msg-bubble">
+              <span class="lnd__msg-name">arjun</span>
+              Can someone explain recursion vs iteration for tree traversal?
+            </div>
+          </div>
+          <div class="lnd__msg lnd__msg--other">
+            <div class="lnd__msg-avatar">M</div>
+            <div class="lnd__msg-bubble">
+              <span class="lnd__msg-name">maya</span>
+              Recursion is more intuitive for trees. Iteration needs an explicit stack.
+            </div>
+          </div>
+          <div class="lnd__msg lnd__msg--other">
+            <div class="lnd__msg-avatar">K</div>
+            <div class="lnd__msg-bubble">
+              <span class="lnd__msg-name">kushal</span>
+              Here's a comparison I wrote up yesterday — shared a file above
+            </div>
+          </div>
+        </div>
+        <div class="lnd__mock-input">
+          <span>Type a message...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rooms flowing -->
+  {% if featured_rooms %}
+  <div class="lnd__feed container">
+    <div class="lnd__feed-header">
+      <h2>Happening now</h2>
+      <span class="lnd__live-dot"></span>
+    </div>
+    <div class="lnd__track">
+      {% for room in featured_rooms %}
+      <a href="{% url 'login' %}" class="lnd__tile">
+        <div class="lnd__tile-top">
+          <span class="lnd__tile-topic">{{ room.topic.name|default:"General" }}</span>
+          <span class="lnd__tile-n">{{ room.participant_count }}</span>
+        </div>
+        <h3>{{ room.name }}</h3>
+        {% if room.description %}<p>{{ room.description|truncatechars:70 }}</p>{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Topics as a visual strip -->
+  {% if landing_topics %}
+  <div class="lnd__strip">
+    <div class="lnd__strip-scroll">
+      {% for topic in landing_topics %}
+      <a href="{% url 'register' %}" class="lnd__strip-item">{{ topic.name }}</a>
+      {% endfor %}
+      {% for topic in landing_topics %}
+      <a href="{% url 'register' %}" class="lnd__strip-item" aria-hidden="true">{{ topic.name }}</a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Final -->
+  <div class="lnd__end container">
+    <p class="lnd__end-big">Ready?</p>
+    <a href="{% url 'register' %}" class="lnd__cta">Create your account</a>
+    <span class="lnd__end-small">Free forever. No setup. Takes 30 seconds.</span>
+  </div>
+
+</div>
+
+{% endblock %}

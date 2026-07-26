@@ -8,7 +8,7 @@
     <div class="dm-sidebar__list">
       {% if conversations %}
         {% for conv in conversations %}
-        <a href="{% url 'dm' conv.partner.id %}" class="dm-conversation-item">
+        <a href="{% url 'dm' conv.partner.id %}" class="dm-conversation-item dm-nav-link {% if active_chat and active_chat.id == conv.partner.id %}dm-conversation-item--active{% endif %}" data-dm-link>
           <div class="avatar-wrapper" data-user-id="{{conv.partner.id}}">
             <div class="avatar avatar--medium">
               <img src="{{conv.partner.avatar.url}}" alt="{{conv.partner.username}}" />
@@ -40,8 +40,94 @@
     </div>
   </div>
 
+  {% if active_chat %}
+  <div class="dm-main">
+    <div class="dm-main__header">
+      <div class="avatar-wrapper" data-user-id="{{active_chat.id}}">
+        <div class="avatar avatar--small">
+          <img src="{{active_chat.avatar.url}}" alt="{{active_chat.username}}" />
+        </div>
+        <span class="online-dot"></span>
+      </div>
+      <div>
+        <strong>{{active_chat.name|default:active_chat.username}}</strong>
+        <a href="{% url 'user-profile' active_chat.id %}" style="font-size:1.2rem;display:block;color:var(--color-text-muted);">View profile</a>
+      </div>
+    </div>
+
+    <div class="dm-messages" id="dm-messages">
+      {% for msg in dm_messages %}
+      <div class="dm-bubble {% if msg.sender == request.user %}dm-bubble--mine{% else %}dm-bubble--theirs{% endif %}" data-dm-id="{{msg.id}}">
+        <div class="dm-bubble__body markdown-body" data-raw="{{msg.body|escapejs}}"></div>
+        <span class="dm-bubble__time">{{msg.created|timesince}} ago</span>
+      </div>
+      {% empty %}
+      <div class="dm-empty" style="margin:auto;">
+        <p>No messages yet. Say hello!</p>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="dm-input">
+      <form id="dm-form">
+        <input id="dm-input-field" type="text" placeholder="Write a message..." autocomplete="off" />
+        <button type="submit" class="btn btn--main">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const otherId = "{{active_chat.id}}";
+    const myId = "{{request.user.id}}";
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+    const dmSocket = new WebSocket(wsProtocol + window.location.host + '/ws/dm/' + otherId + '/');
+
+    const dmMessages = document.getElementById('dm-messages');
+    const dmForm = document.getElementById('dm-form');
+    const dmInput = document.getElementById('dm-input-field');
+
+    function scrollBottom() {
+      dmMessages.scrollTop = dmMessages.scrollHeight;
+    }
+    scrollBottom();
+
+    dmSocket.onmessage = function(e) {
+      const data = JSON.parse(e.data);
+      const isMine = String(data.sender_id) === String(myId);
+      const bubble = document.createElement('div');
+      bubble.className = `dm-bubble ${isMine ? 'dm-bubble--mine' : 'dm-bubble--theirs'}`;
+      bubble.innerHTML = `
+        <div class="dm-bubble__body markdown-body">${(typeof marked !== 'undefined' ? marked.parse(data.body) : data.body)}</div>
+        <span class="dm-bubble__time">${data.timestamp}</span>
+      `;
+      dmMessages.appendChild(bubble);
+      scrollBottom();
+    };
+
+    dmForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      const body = dmInput.value.trim();
+      if (!body) return;
+      dmSocket.send(JSON.stringify({ body }));
+      dmInput.value = '';
+    });
+  </script>
+
+  {% else %}
   <div class="dm-main dm-main--empty">
     <p>Select a conversation to start messaging</p>
   </div>
+  {% endif %}
 </div>
+
+<script>
+document.querySelectorAll('[data-dm-link]').forEach(function(link) {
+  link.addEventListener('click', function(e) {
+    e.preventDefault();
+    window.location.replace(this.href);
+  });
+});
+</script>
 {% endblock %}

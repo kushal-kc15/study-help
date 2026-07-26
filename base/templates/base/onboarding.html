@@ -1,0 +1,166 @@
+{% extends 'main.html' %}
+{% block content %}
+<main class="onboarding-page">
+  <div class="onboarding-container">
+    <form method="POST" id="onboarding-form">
+      {% csrf_token %}
+
+      <!-- Step 1: Interests -->
+      <div class="onboarding-step" id="step-1">
+        <div class="onboarding-step__header">
+          <div class="onboarding-progress">
+            <div class="onboarding-progress__bar" style="width:33%"></div>
+          </div>
+          <p class="onboarding-step__count">Step 1 of 3</p>
+          <h2>What do you want to study?</h2>
+          <p class="onboarding-step__sub">Pick at least 3 topics — we'll show you relevant rooms.</p>
+        </div>
+
+        <div class="topic-grid" id="topic-grid">
+          {% for topic in topics %}
+          <button type="button" class="topic-chip" data-topic="{{topic}}">{{topic}}</button>
+          {% endfor %}
+        </div>
+
+        <div class="onboarding-match-count" id="match-count" style="display:none;">
+          <span id="match-number">0</span> rooms match your selection
+        </div>
+
+        <div class="onboarding-actions">
+          <button type="button" class="btn btn--main" id="step1-next" disabled onclick="goToStep(2)">Continue</button>
+          <a href="{% url 'home' %}" class="btn btn--link" onclick="skipOnboarding()">Skip for now</a>
+        </div>
+      </div>
+
+      <!-- Step 2: Goal -->
+      <div class="onboarding-step" id="step-2" style="display:none;">
+        <div class="onboarding-step__header">
+          <div class="onboarding-progress">
+            <div class="onboarding-progress__bar" style="width:66%"></div>
+          </div>
+          <p class="onboarding-step__count">Step 2 of 3</p>
+          <h2>What brings you here?</h2>
+          <p class="onboarding-step__sub">This helps us personalise your experience.</p>
+        </div>
+
+        <div class="goal-grid">
+          <label class="goal-card">
+            <input type="radio" name="goal" value="find" />
+            <span class="goal-card__icon">🔍</span>
+            <span class="goal-card__label">Find study partners</span>
+          </label>
+          <label class="goal-card">
+            <input type="radio" name="goal" value="join" />
+            <span class="goal-card__icon">💬</span>
+            <span class="goal-card__label">Join discussions</span>
+          </label>
+          <label class="goal-card">
+            <input type="radio" name="goal" value="host" />
+            <span class="goal-card__icon">🏠</span>
+            <span class="goal-card__label">Host my own rooms</span>
+          </label>
+          <label class="goal-card">
+            <input type="radio" name="goal" value="browse" />
+            <span class="goal-card__icon">📚</span>
+            <span class="goal-card__label">Just browsing</span>
+          </label>
+        </div>
+
+        <div class="onboarding-actions">
+          <button type="button" class="btn btn--dark" onclick="goToStep(1)">Back</button>
+          <button type="button" class="btn btn--main" onclick="goToStep(3)">Continue</button>
+        </div>
+      </div>
+
+      <!-- Step 3: Level -->
+      <div class="onboarding-step" id="step-3" style="display:none;">
+        <div class="onboarding-step__header">
+          <div class="onboarding-progress">
+            <div class="onboarding-progress__bar" style="width:100%"></div>
+          </div>
+          <p class="onboarding-step__count">Step 3 of 3</p>
+          <h2>What's your experience level?</h2>
+          <p class="onboarding-step__sub">We'll match you with rooms at the right level.</p>
+        </div>
+
+        <div class="level-grid">
+          <label class="level-card">
+            <input type="radio" name="level" value="beginner" />
+            <span class="level-card__icon">🌱</span>
+            <strong>Beginner</strong>
+            <span>Just getting started</span>
+          </label>
+          <label class="level-card">
+            <input type="radio" name="level" value="intermediate" />
+            <span class="level-card__icon">⚡</span>
+            <strong>Intermediate</strong>
+            <span>Know the basics</span>
+          </label>
+          <label class="level-card">
+            <input type="radio" name="level" value="advanced" />
+            <span class="level-card__icon">🚀</span>
+            <strong>Advanced</strong>
+            <span>Deep expertise</span>
+          </label>
+        </div>
+
+        <div class="onboarding-actions">
+          <button type="button" class="btn btn--dark" onclick="goToStep(2)">Back</button>
+          <button type="submit" class="btn btn--main">Find my rooms →</button>
+        </div>
+      </div>
+
+      <!-- Hidden interests field -->
+      <input type="hidden" name="interests" id="interests-hidden" value="" />
+    </form>
+  </div>
+</main>
+
+<script>
+  const selectedTopics = new Set();
+  const chips = document.querySelectorAll('.topic-chip');
+  const nextBtn = document.getElementById('step1-next');
+  const matchCount = document.getElementById('match-count');
+  const matchNumber = document.getElementById('match-number');
+  const hiddenInterests = document.getElementById('interests-hidden');
+
+  chips.forEach(chip => {
+    chip.addEventListener('click', function() {
+      const topic = this.dataset.topic;
+      if (selectedTopics.has(topic)) {
+        selectedTopics.delete(topic);
+        this.classList.remove('topic-chip--selected');
+      } else {
+        selectedTopics.add(topic);
+        this.classList.add('topic-chip--selected');
+      }
+      hiddenInterests.value = Array.from(selectedTopics).join(',');
+      nextBtn.disabled = selectedTopics.size < 3;
+
+      if (selectedTopics.size >= 1) {
+        matchCount.style.display = 'block';
+        fetch('/api/room-count/?topics=' + encodeURIComponent(Array.from(selectedTopics).join(',')))
+          .then(r => r.json())
+          .then(d => matchNumber.textContent = d.count);
+      } else {
+        matchCount.style.display = 'none';
+      }
+    });
+  });
+
+  function goToStep(n) {
+    document.querySelectorAll('.onboarding-step').forEach(s => s.style.display = 'none');
+    document.getElementById('step-' + n).style.display = 'block';
+  }
+
+  function skipOnboarding() {
+    fetch('/onboarding/skip/', {method: 'POST', headers: {'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''}});
+  }
+
+  // Convert comma-separated interests to proper form inputs on submit
+  document.getElementById('onboarding-form').addEventListener('submit', function() {
+    const hidden = document.getElementById('interests-hidden');
+    hidden.value = Array.from(selectedTopics).join(',');
+  });
+</script>
+{% endblock %}

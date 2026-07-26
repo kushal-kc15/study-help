@@ -1,27 +1,20 @@
 <div class="activities">
-  <h2>Recent Activities</h2>
-  {% for message in room_messages %}
-  <div class="activities__box">
-    <div class="activities__boxHeader">
-      <a href="{% url 'user-profile' message.user.id %}">
-        <div class="avatar avatar--small">
-          <img src="{{message.user.avatar.url}}" alt="{{message.user.username}}" />
-        </div>
-        <p>
-          @{{ message.user.username }}
-          <span>{{ message.created|timesince }} ago</span>
-        </p>
-      </a>
-      {% if request.user == message.user %}
-      <a href="{% url 'delete-message' message.id %}" class="thread__delete">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </a>
-      {% endif %}
-    </div>
-    <div class="activities__boxContent">
-      <p>replied to post "<a href="{% url 'room' message.room.id %}">{{message.room}}</a>"</p>
-      <div class="activities__boxRoomContent">{{message.body}}</div>
-    </div>
+  <h2>Active Now</h2>
+  <div class="active-rooms">
+    {% for room in active_rooms %}
+    <a href="{% url 'room' room.id %}" class="active-room">
+      <div class="active-room__info">
+        <span class="active-room__name">{{ room.name }}</span>
+        <span class="active-room__meta">
+          {% if room.topic %}{{ room.topic.name }} · {% endif %}
+          {{ room.participants.count }} joined
+        </span>
+      </div>
+      <span class="active-room__dot"></span>
+    </a>
+    {% empty %}
+    <p class="active-rooms__empty">No activity yet.</p>
+    {% endfor %}
   </div>
-  {% endfor %}
+  <a href="{% url 'home' %}?tab=trending" class="active-rooms__more">See trending rooms →</a>
 </div>

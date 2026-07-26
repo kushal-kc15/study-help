@@ -33,22 +33,39 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 })();
 
-// Dropdown Menu
-const dropdownMenu = document.querySelector(".dropdown-menu");
-const dropdownButton = document.querySelector(".dropdown-button");
+// Dropdown & Notification Modal
+(function () {
+  const dropdownMenu = document.querySelector(".dropdown-menu");
+  const dropdownButton = document.querySelector(".dropdown-button");
+  const notifToggle = document.getElementById("notif-toggle");
+  const notifModal = document.getElementById("notif-modal");
 
-if (dropdownButton) {
-  dropdownButton.addEventListener("click", (e) => {
-    e.stopPropagation();
-    dropdownMenu.classList.toggle("show");
-  });
+  if (dropdownButton && dropdownMenu) {
+    dropdownButton.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (notifModal) notifModal.classList.remove("show");
+      dropdownMenu.classList.toggle("show");
+    });
+  }
+
+  if (notifToggle && notifModal) {
+    notifToggle.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (dropdownMenu) dropdownMenu.classList.remove("show");
+      notifModal.classList.toggle("show");
+    });
+  }
 
   document.addEventListener("click", (e) => {
-    if (!dropdownMenu.contains(e.target)) {
+    if (dropdownMenu && !dropdownMenu.contains(e.target) && dropdownButton && !dropdownButton.contains(e.target)) {
       dropdownMenu.classList.remove("show");
     }
+    if (notifModal && !notifModal.contains(e.target) && notifToggle && !notifToggle.contains(e.target)) {
+      notifModal.classList.remove("show");
+    }
   });
-}
+})();
 
 // Upload Image Preview
 const photoInput = document.querySelector("#avatar");

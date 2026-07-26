@@ -1,4 +1,5 @@
 {% extends 'main.html' %}
+{% block back_nav %}{% endblock %}
 {% block content %}
 <main class="layout layout--3">
       <div class="container">
@@ -26,10 +27,41 @@
               <a class="btn btn--main btn--pill" href="{% url 'activity' %}">Recent Activities</a>
             </div>
           </div>
+          <!-- Feed Tabs -->
+          {% if not q %}
+          <div class="feed-tabs">
+            {% if request.user.is_authenticated %}
+            <a href="?tab=for_you" class="feed-tab {% if active_tab == 'for_you' %}feed-tab--active{% endif %}">
+              ✨ For You
+            </a>
+            <a href="?tab=joined" class="feed-tab {% if active_tab == 'joined' %}feed-tab--active{% endif %}">
+              ✅ Joined
+            </a>
+            {% endif %}
+            <a href="?tab=trending" class="feed-tab {% if active_tab == 'trending' %}feed-tab--active{% endif %}">
+              🔥 Trending
+            </a>
+            <a href="?tab=new" class="feed-tab {% if active_tab == 'new' %}feed-tab--active{% endif %}">
+              🆕 New
+            </a>
+            <a href="?tab=all" class="feed-tab {% if active_tab == 'all' %}feed-tab--active{% endif %}">
+              All
+            </a>
+          </div>
+          {% endif %}
+
           <div class="roomList__header">
             <div>
-              <h2>Study Room</h2>
-              <p>{{room_count}} Rooms available</p>
+              <h2>
+                {% if active_tab == 'for_you' %}Your Rooms
+                {% elif active_tab == 'joined' %}Joined Rooms
+                {% elif active_tab == 'trending' %}Trending Today
+                {% elif active_tab == 'new' %}Newest Rooms
+                {% elif active_tab == 'search' %}Search Results
+                {% else %}Study Rooms
+                {% endif %}
+              </h2>
+              <p>{{room_count}} room{{room_count|pluralize}} available</p>
             </div>
             {% if request.user.is_authenticated %}
             <a class="btn btn--main" href="{% url 'create-room' %}">
@@ -43,19 +75,33 @@
             </a>
             {% endif %}
           </div>
+          {% if active_tab == 'for_you' and request.user.is_authenticated and not request.user.interests.exists %}
+          <div class="empty-state">
+            <p>✨ You haven't set your interests yet.</p>
+            <a href="{% url 'onboarding' %}" class="btn btn--main btn--pill" style="margin-top:1rem;">Personalise my feed</a>
+          </div>
+          {% elif room_count == 0 %}
+          <div class="empty-state">
+            <p>No rooms found{% if q %} for "{{q}}"{% endif %}.</p>
+            {% if request.user.is_authenticated %}
+            <a href="{% url 'create-room' %}" class="btn btn--main btn--pill" style="margin-top:1rem;">Create the first room</a>
+            {% endif %}
+          </div>
+          {% else %}
           {% include 'base/feed_component.html' %}
+          {% endif %}
 
           {% if page_obj.has_other_pages %}
           <div class="pagination">
             {% if page_obj.has_previous %}
-            <a href="?{% if request.GET.q %}q={{request.GET.q}}&{% endif %}page={{page_obj.previous_page_number}}" class="pagination__btn">
+            <a href="?{% if request.GET.q %}q={{request.GET.q}}&{% endif %}{% if active_tab %}tab={{active_tab}}&{% endif %}page={{page_obj.previous_page_number}}" class="pagination__btn">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
               Prev
             </a>
             {% endif %}
             <span class="pagination__info">Page {{page_obj.number}} of {{page_obj.paginator.num_pages}}</span>
             {% if page_obj.has_next %}
-            <a href="?{% if request.GET.q %}q={{request.GET.q}}&{% endif %}page={{page_obj.next_page_number}}" class="pagination__btn">
+            <a href="?{% if request.GET.q %}q={{request.GET.q}}&{% endif %}{% if active_tab %}tab={{active_tab}}&{% endif %}page={{page_obj.next_page_number}}" class="pagination__btn">
               Next
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
             </a>

@@ -23,7 +23,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dev-only-key-change-i
 
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h.strip()]
 
 
 # Application definition
@@ -92,12 +92,24 @@ WSGI_APPLICATION = 'studyhelp.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+if os.environ.get('DB_NAME'):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('DB_NAME', 'studyhelp'),
+            'USER': os.environ.get('DB_USER', 'postgres'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+            'HOST': os.environ.get('DB_HOST', 'localhost'),
+            'PORT': os.environ.get('DB_PORT', '5432'),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -158,7 +170,7 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOW_ALL_ORIGINS = DEBUG
-CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if not DEBUG else []
+CORS_ALLOWED_ORIGINS = [o for o in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if o] if not DEBUG else []
 
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
@@ -211,7 +223,7 @@ else:
 
 PASSWORD_RESET_TIMEOUT = 3600  # 1 hour
 LOGIN_URL = 'login'
-LOGIN_REDIRECT_URL = 'home'
+LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = 'home'
 
 # Google OAuth
@@ -241,4 +253,4 @@ SOCIAL_AUTH_PIPELINE = (
 
 SOCIAL_AUTH_URL_NAMESPACE = 'social'
 SOCIAL_AUTH_SANITIZE_REDIRECTS = False
-SOCIAL_AUTH_REDIRECT_IS_HTTPS = False
+SOCIAL_AUTH_REDIRECT_IS_HTTPS = os.environ.get('SOCIAL_AUTH_REDIRECT_IS_HTTPS', 'False') == 'True'

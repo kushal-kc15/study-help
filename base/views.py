@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpResponse, JsonResponse
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Q, Max, Count
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
@@ -37,6 +37,14 @@ def logoutpage(request):
     logout(request)
     return redirect('home')
 
+ONBOARDING_TOPICS = [
+    'Python', 'JavaScript', 'Web Development', 'Machine Learning', 'Data Science',
+    'Algorithms', 'Mathematics', 'Physics', 'Chemistry', 'Biology',
+    'Database', 'DevOps', 'Mobile Development', 'Cybersecurity', 'UI/UX Design',
+    'Artificial Intelligence', 'Cloud Computing', 'Networking', 'Competitive Programming', 'Open Source',
+]
+
+
 def registerpage(request):
     form = RegisterForm()
     if request.method == 'POST':
@@ -47,9 +55,54 @@ def registerpage(request):
             user.save(update_fields=['is_email_verified'])
             _send_verification_email(request, user)
             login(request, user)
-            messages.info(request, f'Welcome, {user.name or user.username}! Check your email to verify your address.')
-            return redirect('home')
+            return redirect('onboarding')
     return render(request, 'base/login_register.html', {'form': form})
+
+
+@login_required(login_url='login')
+def onboarding(request):
+    if request.user.onboarding_complete and request.GET.get('redo') != '1':
+        return redirect('home')
+
+    if request.method == 'POST':
+        interests_raw = request.POST.get('interests', '')
+        selected = [t.strip() for t in interests_raw.split(',') if t.strip()]
+        goal = request.POST.get('goal', '')
+        level = request.POST.get('level', '')
+
+        topics = []
+        for name in selected:
+            topic, _ = Topic.objects.get_or_create(name=name)
+            topics.append(topic)
+
+        user = request.user
+        user.interests.set(topics)
+        user.goal = goal
+        user.level = level
+        user.onboarding_complete = True
+        user.save(update_fields=['goal', 'level', 'onboarding_complete'])
+
+        return redirect('home')
+
+    return render(request, 'base/onboarding.html', {
+        'topics': ONBOARDING_TOPICS,
+    })
+
+
+@login_required(login_url='login')
+def skip_onboarding(request):
+    if request.method == 'POST':
+        request.user.onboarding_complete = True
+        request.user.save(update_fields=['onboarding_complete'])
+    return redirect('home')
+
+
+def onboarding_room_count(request):
+    topics = [t.strip() for t in request.GET.get('topics', '').split(',') if t.strip()]
+    count = Room.objects.filter(
+        Q(tags__name__in=topics) | Q(topic__name__in=topics)
+    ).distinct().count()
+    return JsonResponse({'count': count})
 
 
 def _send_verification_email(request, user):
@@ -85,20 +138,68 @@ def resend_verification(request):
     return redirect('home')
 
 def home(request):
+    from django.utils import timezone
+    import datetime
+
+    # Landing page for unauthenticated users
+    if not request.user.is_authenticated:
+        featured_rooms = Room.objects.select_related('host', 'topic').annotate(
+            participant_count=Count('participants')
+        ).order_by('-updated')[:6]
+        landing_topics = Topic.objects.annotate(room_count=Count('room')).filter(room_count__gt=0).order_by('-room_count')[:8]
+        context = {
+            'total_rooms': Room.objects.count(),
+            'total_users': User.objects.count(),
+            'total_messages': Message.objects.count(),
+            'featured_rooms': featured_rooms,
+            'landing_topics': landing_topics,
+        }
+        return render(request, 'base/landing.html', context)
+
     q = request.GET.get('q', '')
-    rooms_qs = Room.objects.filter(
-        Q(topic__name__icontains=q) |
-        Q(tags__name__icontains=q) |
-        Q(name__icontains=q) |
-        Q(description__icontains=q) |
-        Q(host__username__icontains=q)
-    ).distinct()
+    tab = request.GET.get('tab', 'for_you' if request.user.onboarding_complete else 'trending')
+
+    if q:
+        rooms_qs = Room.objects.filter(
+            Q(topic__name__icontains=q) |
+            Q(tags__name__icontains=q) |
+            Q(name__icontains=q) |
+            Q(description__icontains=q) |
+            Q(host__username__icontains=q)
+        ).distinct()
+        tab = 'search'
+    elif tab == 'joined':
+        rooms_qs = Room.objects.filter(
+            Q(participants=request.user) | Q(host=request.user)
+        ).distinct()
+    elif tab == 'for_you':
+        user_interests = request.user.interests.all()
+        if user_interests.exists():
+            rooms_qs = Room.objects.filter(
+                Q(tags__in=user_interests) | Q(topic__in=user_interests)
+            ).distinct()
+        else:
+            rooms_qs = Room.objects.all()
+    elif tab == 'trending':
+        since = timezone.now() - datetime.timedelta(hours=24)
+        rooms_qs = Room.objects.annotate(
+            recent_messages=Count('message', filter=Q(message__created__gte=since))
+        ).order_by('-recent_messages', '-updated')
+    elif tab == 'new':
+        rooms_qs = Room.objects.order_by('-created')
+    elif tab == 'all':
+        rooms_qs = Room.objects.all()
+    else:
+        rooms_qs = Room.objects.all()
+
     topics = Topic.objects.all()[0:5]
     room_count = rooms_qs.count()
-    room_messages = Message.objects.filter(
-        Q(room__topic__name__icontains=q) |
-        Q(room__name__icontains=q)
-    )
+
+    # Sidebar: 8 most recently active rooms with last message preview
+    active_rooms = Room.objects.annotate(
+        last_msg_time=Max('message__created')
+    ).filter(last_msg_time__isnull=False).order_by('-last_msg_time').select_related('host', 'topic')[:8]
+
     paginator = Paginator(rooms_qs, 10)
     page_number = request.GET.get('page', 1)
     rooms = paginator.get_page(page_number)
@@ -106,16 +207,23 @@ def home(request):
         'rooms': rooms,
         'topics': topics,
         'room_count': room_count,
-        'room_messages': room_messages,
+        'active_rooms': active_rooms,
         'page_obj': rooms,
+        'active_tab': tab,
+        'q': q,
     }
-    return render(request, 'base/home.html',context)
+    return render(request, 'base/home.html', context)
 
 def room(request,pk):
     room=get_object_or_404(Room, id=pk)
     room_messages=room.message_set.all()
     participants=room.participants.all()
+    is_participant = request.user.is_authenticated and (
+        room.participants.filter(id=request.user.id).exists() or room.host == request.user
+    )
     if request.method=='POST':
+        if not is_participant:
+            return redirect('room', pk=room.id)
         if room.muted_users.filter(id=request.user.id).exists():
             messages.error(request, 'You are muted in this room.')
             return redirect('room', pk=room.id)
@@ -124,7 +232,6 @@ def room(request,pk):
             room=room,
             body=request.POST.get('body')
         )
-        room.participants.add(request.user)
         other_participants = room.participants.exclude(id=request.user.id)
         Notification.objects.bulk_create([
             Notification(
@@ -146,6 +253,7 @@ def room(request,pk):
         'room_files': room_files,
         'emojis': emojis,
         'is_muted': is_muted,
+        'is_participant': is_participant,
     }
     return render(request, 'base/room.html',context)
 
@@ -233,7 +341,6 @@ def UpdateUser(request):
         form = UserForm(request.POST, request.FILES, instance=user)
         if form.is_valid():
             form.save()
-            messages.success(request, 'Profile updated successfully.')
             return redirect('user-profile', pk=user.id)
     return render(request, 'base/update-user.html', {'form': form})
 
@@ -381,11 +488,18 @@ def toggle_reaction(request, pk):
     return JsonResponse({'counts': counts, 'user_reactions': user_reactions})
 
 
+@login_required(login_url='login')
+def join_room(request, pk):
+    room = get_object_or_404(Room, id=pk)
+    if request.method == 'POST':
+        room.participants.add(request.user)
+    return redirect('room', pk=room.id)
+
+
 def join_via_invite(request, token):
     room = get_object_or_404(Room, invite_token=token)
     if request.user.is_authenticated:
         room.participants.add(request.user)
-        messages.success(request, f'You joined "{room.name}"!')
     else:
         messages.info(request, 'Please log in to join this room.')
         return redirect(f'/login?next=/invite/{token}/')
@@ -467,9 +581,8 @@ def bookmarks(request):
 
 
 @login_required(login_url='login')
-def inbox(request):
+def inbox(request, user_id=None):
     me = request.user
-    # Find all users this person has exchanged DMs with
     partner_ids = DirectMessage.objects.filter(
         Q(sender=me) | Q(recipient=me)
     ).values_list('sender', 'recipient')
@@ -489,23 +602,118 @@ def inbox(request):
         conversations.append({'partner': partner, 'last_msg': last_msg, 'unread': unread})
 
     conversations.sort(key=lambda x: x['last_msg'].created if x['last_msg'] else 0, reverse=True)
-    return render(request, 'base/inbox.html', {'conversations': conversations})
+
+    context = {'conversations': conversations}
+
+    if user_id:
+        other = get_object_or_404(User, id=user_id)
+        if me == other:
+            return redirect('inbox')
+        dm_messages = DirectMessage.objects.filter(
+            Q(sender=me, recipient=other) | Q(sender=other, recipient=me)
+        )
+        dm_messages.filter(recipient=me, is_read=False).update(is_read=True)
+        context['active_chat'] = other
+        context['dm_messages'] = dm_messages
+
+    return render(request, 'base/inbox.html', context)
 
 
 @login_required(login_url='login')
-def dm_conversation(request, user_id):
-    me = request.user
-    other = get_object_or_404(User, id=user_id)
-    if me == other:
-        return redirect('inbox')
-
-    messages_qs = DirectMessage.objects.filter(
-        Q(sender=me, recipient=other) | Q(sender=other, recipient=me)
-    )
-    # mark received messages as read
-    messages_qs.filter(recipient=me, is_read=False).update(is_read=True)
-
-    return render(request, 'base/dm_conversation.html', {
-        'other': other,
-        'messages': messages_qs,
+def send_room_message(request, pk):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    room = get_object_or_404(Room, id=pk)
+    is_participant = room.participants.filter(id=request.user.id).exists() or room.host == request.user
+    if not is_participant:
+        return JsonResponse({'error': 'Not a participant'}, status=403)
+    if room.muted_users.filter(id=request.user.id).exists():
+        return JsonResponse({'error': 'You are muted'}, status=403)
+    body = request.POST.get('body', '').strip()
+    if not body:
+        return JsonResponse({'error': 'Empty message'}, status=400)
+    message = Message.objects.create(user=request.user, room=room, body=body)
+    other_participants = room.participants.exclude(id=request.user.id)
+    Notification.objects.bulk_create([
+        Notification(
+            user=p,
+            notification_type='message',
+            message=f"@{request.user.username} sent a message in \"{room.name}\"",
+            room=room,
+            sender=request.user,
+        ) for p in other_participants
+    ])
+    return JsonResponse({
+        'id': message.id,
+        'body': message.body,
+        'username': request.user.username,
+        'avatar_url': request.user.avatar.url if request.user.avatar else '/static/images/avatar.svg',
+        'user_id': request.user.id,
+        'timestamp': 'just now',
     })
+
+
+@login_required(login_url='login')
+def poll_room_messages(request, pk):
+    room = get_object_or_404(Room, id=pk)
+    after_id = request.GET.get('after')
+    if not after_id:
+        return JsonResponse({'messages': []})
+    msgs = room.message_set.filter(id__gt=after_id).select_related('user')
+    data = [{
+        'id': m.id,
+        'body': m.body,
+        'username': m.user.username,
+        'avatar_url': m.user.avatar.url if m.user.avatar else '/static/images/avatar.svg',
+        'user_id': m.user.id,
+        'timestamp': f"{m.created.strftime('%b %d, %H:%M')}",
+    } for m in msgs]
+    return JsonResponse({'messages': data})
+
+
+@login_required(login_url='login')
+def send_dm_message(request, user_id):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+    other = get_object_or_404(User, id=user_id)
+    body = request.POST.get('body', '').strip()
+    if not body:
+        return JsonResponse({'error': 'Empty message'}, status=400)
+    dm = DirectMessage.objects.create(sender=request.user, recipient=other, body=body)
+    Notification.objects.create(
+        user=other,
+        notification_type='message',
+        message=f"@{request.user.username} sent you a direct message",
+        sender=request.user,
+    )
+    return JsonResponse({
+        'id': dm.id,
+        'body': dm.body,
+        'sender_id': request.user.id,
+        'username': request.user.username,
+        'avatar_url': request.user.avatar.url if request.user.avatar else '/static/images/avatar.svg',
+        'timestamp': 'just now',
+    })
+
+
+@login_required(login_url='login')
+def poll_dm_messages(request, user_id):
+    other = get_object_or_404(User, id=user_id)
+    after_id = request.GET.get('after')
+    if not after_id:
+        return JsonResponse({'messages': []})
+    me = request.user
+    msgs = DirectMessage.objects.filter(
+        Q(sender=me, recipient=other) | Q(sender=other, recipient=me),
+        id__gt=after_id
+    ).select_related('sender')
+    msgs.filter(recipient=me, is_read=False).update(is_read=True)
+    data = [{
+        'id': m.id,
+        'body': m.body,
+        'sender_id': m.sender.id,
+        'username': m.sender.username,
+        'avatar_url': m.sender.avatar.url if m.sender.avatar else '/static/images/avatar.svg',
+        'timestamp': f"{m.created.strftime('%H:%M')}",
+    } for m in msgs]
+    return JsonResponse({'messages': data})

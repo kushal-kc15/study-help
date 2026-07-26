@@ -44,17 +44,21 @@ def update_profile(strategy, details, user=None, is_new=False, *args, **kwargs):
     if not user:
         return
 
-    changed = False
+    changed = []
 
     if not user.name:
         name = details.get('fullname') or f"{details.get('first_name','')} {details.get('last_name','')}".strip()
         if name:
             user.name = name
-            changed = True
+            changed.append('name')
 
     if not user.is_email_verified:
         user.is_email_verified = True
-        changed = True
+        changed.append('is_email_verified')
 
     if changed:
-        user.save(update_fields=[f for f in ['name', 'is_email_verified'] if changed])
+        user.save(update_fields=changed)
+
+    # Send new Google users through onboarding
+    if is_new:
+        return {'next': '/onboarding/'}

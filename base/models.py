@@ -14,6 +14,19 @@ class User(AbstractUser):
     )
     is_email_verified = models.BooleanField(default=False)
     email_verification_token = models.UUIDField(default=uuid.uuid4, unique=True)
+    interests = models.ManyToManyField('Topic', related_name='interested_users', blank=True)
+    goal = models.CharField(max_length=20, blank=True, choices=[
+        ('find', 'Find study partners'),
+        ('join', 'Join discussions'),
+        ('host', 'Host my own rooms'),
+        ('browse', 'Just browsing'),
+    ])
+    level = models.CharField(max_length=20, blank=True, choices=[
+        ('beginner', 'Beginner'),
+        ('intermediate', 'Intermediate'),
+        ('advanced', 'Advanced'),
+    ])
+    onboarding_complete = models.BooleanField(default=False)
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []

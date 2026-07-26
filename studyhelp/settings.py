@@ -168,8 +168,20 @@ STORAGES = {
     },
 }
 
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+# Media files (User uploaded files)
+if not DEBUG:
+    # Production: Use Supabase Storage
+    DEFAULT_FILE_STORAGE = 'supabase_storage.storage.SupabaseStorage'
+    SUPABASE_URL = os.environ.get('SUPABASE_URL')
+    SUPABASE_KEY = os.environ.get('SUPABASE_ANON_KEY')
+    SUPABASE_BUCKET = 'media'  # Your bucket name
+    MEDIA_URL = f"{SUPABASE_URL}/storage/v1/object/public/media/"
+    MEDIA_ROOT = ''  # Not used with Supabase
+else:
+    # Development: Use local file system
+    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = BASE_DIR / 'media'
 
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
 

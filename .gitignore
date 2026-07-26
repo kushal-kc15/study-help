@@ -39,3 +39,9 @@ Thumbs.db
 dist/
 build/
 *.egg-info/
+
+# Data exports (remove after loading)
+data.json
+
+# Logs
+*.log

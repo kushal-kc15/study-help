@@ -169,6 +169,7 @@ STORAGES = {
 }
 
 # Media files (User uploaded files)
+# Media files (User uploaded files)
 if not DEBUG:
     # Production: Use Supabase Storage
     DEFAULT_FILE_STORAGE = 'supabase_storage.storage.SupabaseStorage'
@@ -182,7 +183,6 @@ else:
     DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
     MEDIA_URL = '/media/'
     MEDIA_ROOT = BASE_DIR / 'media'
-
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
 
 # Default primary key field type

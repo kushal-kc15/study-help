@@ -1,29 +1,17 @@
-import bleach
 from django import template
-from django.utils.html import escape
+
+from base.sanitization import sanitize_markdown_source, sanitize_rendered_markdown
 
 register = template.Library()
-
-ALLOWED_TAGS = [
-    'p', 'br', 'strong', 'b', 'em', 'i', 'code', 'pre', 'blockquote',
-    'ul', 'ol', 'li', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-    'hr', 'del', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span',
-]
-
-ALLOWED_ATTRS = {
-    'a': ['href', 'title', 'rel', 'target'],
-    'code': ['class'],
-    'pre': ['class'],
-    'span': ['class'],
-}
 
 
 @register.filter(is_safe=True)
 def sanitize_html(value):
-    """Sanitize HTML — use after client-side markdown render or for raw storage."""
-    return bleach.clean(
-        str(value),
-        tags=ALLOWED_TAGS,
-        attributes=ALLOWED_ATTRS,
-        strip=True,
-    )
+    """Sanitize HTML produced by a Markdown renderer."""
+    return sanitize_rendered_markdown(value)
+
+
+@register.filter
+def sanitize_markdown(value):
+    """Strip raw HTML from Markdown while leaving Markdown syntax intact."""
+    return sanitize_markdown_source(value)

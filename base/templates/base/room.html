@@ -1,4 +1,5 @@
 {% extends 'main.html' %}
+{% load markdown_extras %}
 {% block content %}
 <div class="room">
   <div>
@@ -122,7 +123,7 @@
                   </a>
                   {% endif %}
                 </div>
-                <div class="thread__details markdown-body" data-raw="{{message.body|escapejs}}"></div>
+                <div class="thread__details markdown-body" data-raw="{{message.body|sanitize_markdown}}"></div>
                 <div class="reaction-counts" id="reactions-{{message.id}}" data-msg-id="{{message.id}}"></div>
               </div>
             </div>
@@ -305,8 +306,6 @@
   const chatForm = document.getElementById('chat-form');
   const chatInput = document.getElementById('chat-input');
 
-  if (typeof marked !== 'undefined') marked.setOptions({ breaks: true, gfm: true });
-  const md = (typeof marked !== 'undefined') ? marked.parse : (t => t);
   const myUserId = "{{request.user.id}}";
   const typingIndicator = document.getElementById('typing-indicator');
   const typingUsers = {};
@@ -322,8 +321,58 @@
           ? `${names[0]} and ${names[1]} are typing`
           : `${names.length} people are typing`;
       typingIndicator.style.display = 'flex';
-      typingIndicator.innerHTML = `<span class="typing-dots"><span></span><span></span><span></span></span>${text}...`;
+      typingIndicator.replaceChildren();
+      const dots = document.createElement('span');
+      dots.className = 'typing-dots';
+      dots.append(document.createElement('span'), document.createElement('span'), document.createElement('span'));
+      typingIndicator.append(dots, document.createTextNode(`${text}...`));
     }
+  }
+
+  function createMessageElement(message, includeMetadata) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'thread__single';
+    if (includeMetadata && message.id != null) wrapper.id = `msg-${message.id}`;
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar avatar--small';
+    const avatarImage = document.createElement('img');
+    avatarImage.src = String(message.avatar_url || '/static/images/avatar.svg');
+    avatarImage.alt = String(message.username || '');
+    avatar.appendChild(avatarImage);
+
+    const content = document.createElement('div');
+    content.style.flex = '1';
+    const author = document.createElement('div');
+    author.className = 'thread__author';
+
+    const authorInfo = includeMetadata
+      ? document.createElement('a')
+      : document.createElement('span');
+    authorInfo.className = 'thread__authorInfo';
+    authorInfo.textContent = `@${String(message.username || '')}`;
+    if (includeMetadata) authorInfo.href = `/profile/${encodeURIComponent(message.user_id)}/`;
+
+    const date = document.createElement('span');
+    date.className = 'thread__date';
+    date.textContent = String(message.timesince || message.timestamp || '');
+    author.append(authorInfo, date);
+
+    const body = document.createElement('div');
+    body.className = 'thread__details markdown-body';
+    StudyHelpMarkdown.renderInto(body, message.body);
+
+    content.append(author, body);
+    if (includeMetadata && message.id != null) {
+      const reactions = document.createElement('div');
+      reactions.className = 'reaction-counts';
+      reactions.id = `reactions-${message.id}`;
+      reactions.dataset.msgId = String(message.id);
+      content.appendChild(reactions);
+    }
+
+    wrapper.append(avatar, content);
+    return wrapper;
   }
 
   chatSocket.onmessage = function(e) {
@@ -340,18 +389,7 @@
       return;
     }
 
-    chatMessages.insertAdjacentHTML('beforeend', `
-      <div class="thread__single">
-        <div class="avatar avatar--small"><img src="${data.avatar_url}" alt="${data.username}" /></div>
-        <div style="flex:1;">
-          <div class="thread__author">
-            <span class="thread__authorInfo">@${data.username}</span>
-            <span class="thread__date">${data.timestamp}</span>
-          </div>
-          <div class="thread__details markdown-body">${md(data.body)}</div>
-        </div>
-      </div>
-    `);
+    chatMessages.appendChild(createMessageElement(data, false));
     document.querySelector('.room__box').scrollTop = document.querySelector('.room__box').scrollHeight;
     delete typingUsers[data.user_id];
     updateTypingDisplay();
@@ -395,21 +433,6 @@
     return first ? first.id.replace('msg-', '') : null;
   }
 
-  function buildMessageHtml(msg) {
-    return `
-      <div class="thread__single" id="msg-${msg.id}">
-        <div class="avatar avatar--small"><img src="${msg.avatar_url}" alt="${msg.username}" /></div>
-        <div style="flex:1;">
-          <div class="thread__author">
-            <a href="/profile/${msg.user_id}/" class="thread__authorInfo">@${msg.username}</a>
-            <span class="thread__date">${msg.timesince}</span>
-          </div>
-          <div class="thread__details markdown-body">${md(msg.body)}</div>
-          <div class="reaction-counts" id="reactions-${msg.id}" data-msg-id="${msg.id}"></div>
-        </div>
-      </div>`;
-  }
-
   function loadOlderMessages() {
     if (loadingMore || !hasMore) return;
     const beforeId = getOldestMsgId();
@@ -424,7 +447,7 @@
       .then(data => {
         hasMore = data.has_more;
         data.messages.reverse().forEach(msg => {
-          chatMessages.insertAdjacentHTML('afterbegin', buildMessageHtml(msg));
+          chatMessages.prepend(createMessageElement(msg, true));
         });
         roomBox.scrollTop = roomBox.scrollHeight - prevScrollHeight;
         loadingIndicator.style.display = 'none';
@@ -445,7 +468,7 @@
   function renderReactions(msgId, counts, userReactions) {
     const container = document.getElementById('reactions-' + msgId);
     if (!container) return;
-    container.innerHTML = '';
+    container.replaceChildren();
     Object.entries(counts).forEach(([emoji, count]) => {
       const chip = document.createElement('button');
       chip.type = 'button';
@@ -518,28 +541,91 @@
     searchBar.style.display = 'none';
     searchInput.value = '';
     searchResults.style.display = 'none';
-    searchResults.innerHTML = '';
+    searchResults.replaceChildren();
     searchCount.textContent = '';
     clearHighlights();
   }
 
-  function highlight(text, q) {
-    if (!q) return text;
-    const re = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi');
-    return text.replace(re, '<mark>$1</mark>');
-  }
-
   function clearHighlights() {
     document.querySelectorAll('#chat-messages mark').forEach(el => {
-      el.outerHTML = el.textContent;
+      el.replaceWith(document.createTextNode(el.textContent));
     });
+    document.getElementById('chat-messages').normalize();
+  }
+
+  function appendHighlightedText(container, text, q) {
+    const value = String(text || '');
+    if (!q) {
+      container.appendChild(document.createTextNode(value));
+      return;
+    }
+
+    const lowerValue = value.toLocaleLowerCase();
+    const lowerQuery = q.toLocaleLowerCase();
+    let start = 0;
+    let matchAt = lowerValue.indexOf(lowerQuery, start);
+    while (matchAt !== -1) {
+      container.appendChild(document.createTextNode(value.slice(start, matchAt)));
+      const mark = document.createElement('mark');
+      mark.textContent = value.slice(matchAt, matchAt + q.length);
+      container.appendChild(mark);
+      start = matchAt + q.length;
+      matchAt = lowerValue.indexOf(lowerQuery, start);
+    }
+    container.appendChild(document.createTextNode(value.slice(start)));
   }
 
   function highlightInChat(q) {
     clearHighlights();
     if (!q) return;
     document.querySelectorAll('#chat-messages .thread__details').forEach(el => {
-      el.innerHTML = highlight(el.innerHTML, q);
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      const textNodes = [];
+      while (walker.nextNode()) textNodes.push(walker.currentNode);
+      textNodes.forEach(node => {
+        if (!node.nodeValue.toLocaleLowerCase().includes(q.toLocaleLowerCase())) return;
+        const fragment = document.createDocumentFragment();
+        appendHighlightedText(fragment, node.nodeValue, q);
+        node.replaceWith(fragment);
+      });
+    });
+  }
+
+  function renderSearchResults(results, q) {
+    searchResults.replaceChildren();
+    results.forEach(message => {
+      const item = document.createElement('a');
+      item.href = `#msg-${encodeURIComponent(message.id)}`;
+      item.className = 'search-result-item';
+      item.addEventListener('click', () => {
+        document.getElementById(`msg-${message.id}`)?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        });
+      });
+
+      const avatar = document.createElement('div');
+      avatar.className = 'avatar avatar--small';
+      const image = document.createElement('img');
+      image.src = String(message.avatar_url || '/static/images/avatar.svg');
+      image.alt = String(message.username || '');
+      avatar.appendChild(image);
+
+      const content = document.createElement('div');
+      content.className = 'search-result-item__content';
+      const author = document.createElement('span');
+      author.className = 'search-result-item__author';
+      author.textContent = `@${String(message.username || '')}`;
+      const date = document.createElement('span');
+      date.className = 'search-result-item__date';
+      date.textContent = String(message.timesince || '');
+      const body = document.createElement('p');
+      body.className = 'search-result-item__body';
+      appendHighlightedText(body, message.body, q);
+
+      content.append(author, date, body);
+      item.append(avatar, content);
+      searchResults.appendChild(item);
     });
   }
 
@@ -550,7 +636,7 @@
       const q = this.value.trim();
       if (!q) {
         searchResults.style.display = 'none';
-        searchResults.innerHTML = '';
+        searchResults.replaceChildren();
         searchCount.textContent = '';
         clearHighlights();
         return;
@@ -562,20 +648,14 @@
           .then(data => {
             searchCount.textContent = data.count ? `${data.count} result${data.count !== 1 ? 's' : ''}` : 'No results';
             if (!data.results.length) {
-              searchResults.innerHTML = '<p style="padding:1.2rem;color:var(--color-text-muted);font-size:1.3rem;">No messages found.</p>';
+              const empty = document.createElement('p');
+              empty.style.cssText = 'padding:1.2rem;color:var(--color-text-muted);font-size:1.3rem;';
+              empty.textContent = 'No messages found.';
+              searchResults.replaceChildren(empty);
               searchResults.style.display = 'block';
               return;
             }
-            searchResults.innerHTML = data.results.map(m => `
-              <a href="#msg-${m.id}" class="search-result-item" onclick="document.getElementById('msg-${m.id}')?.scrollIntoView({behavior:'smooth',block:'center'})">
-                <div class="avatar avatar--small"><img src="${m.avatar_url}" alt="${m.username}" /></div>
-                <div class="search-result-item__content">
-                  <span class="search-result-item__author">@${m.username}</span>
-                  <span class="search-result-item__date">${m.timesince}</span>
-                  <p class="search-result-item__body">${highlight(m.body, q)}</p>
-                </div>
-              </a>
-            `).join('');
+            renderSearchResults(data.results, q);
             searchResults.style.display = 'block';
           });
       }, 300);
@@ -663,16 +743,19 @@
     })
     .then(r => r.json())
     .then(data => {
-      const banner = document.querySelector('.pinned-banner');
+      let banner = document.querySelector('.pinned-banner');
       if (data.pinned) {
-        if (banner) {
-          banner.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg><strong>Pinned:</strong> ${data.body}`;
-        } else {
-          const div = document.createElement('div');
-          div.className = 'pinned-banner';
-          div.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg><strong>Pinned:</strong> ${data.body}`;
-          document.querySelector('.room-tabs').insertAdjacentElement('beforebegin', div);
+        if (!banner) {
+          banner = document.createElement('div');
+          banner.className = 'pinned-banner';
+          document.querySelector('.room-tabs').insertAdjacentElement('beforebegin', banner);
         }
+        banner.replaceChildren();
+        const sourceIcon = document.querySelector('button[title="Pin message"] svg');
+        if (sourceIcon) banner.appendChild(sourceIcon.cloneNode(true));
+        const label = document.createElement('strong');
+        label.textContent = 'Pinned:';
+        banner.append(label, document.createTextNode(` ${String(data.body || '')}`));
       } else if (banner) {
         banner.remove();
       }

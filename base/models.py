@@ -3,6 +3,9 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import FileExtensionValidator
 
+from .sanitization import sanitize_markdown_source
+
+
 class User(AbstractUser):
     name=models.CharField(max_length=100,null=True)
     email=models.EmailField(unique=True,max_length=100)
@@ -111,6 +114,10 @@ class Message(models.Model):
     def __str__(self):
         return self.body[0:50]
 
+    def save(self, *args, **kwargs):
+        self.body = sanitize_markdown_source(self.body)
+        return super().save(*args, **kwargs)
+
 
 def room_file_path(instance, filename):
     return f'room_files/{instance.room.id}/{filename}'
@@ -163,6 +170,10 @@ class DirectMessage(models.Model):
 
     def __str__(self):
         return f"{self.sender} → {self.recipient}: {self.body[:40]}"
+
+    def save(self, *args, **kwargs):
+        self.body = sanitize_markdown_source(self.body)
+        return super().save(*args, **kwargs)
 
 
 class Notification(models.Model):

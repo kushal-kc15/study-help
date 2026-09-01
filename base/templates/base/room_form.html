@@ -65,15 +65,21 @@
   let tags = hidden.value ? hidden.value.split(',').map(t => t.trim()).filter(Boolean) : [];
 
   function render() {
-    display.innerHTML = '';
+    display.replaceChildren();
     tags.forEach((tag, i) => {
       const chip = document.createElement('span');
       chip.className = 'tag-chip';
-      chip.innerHTML = `${tag} <button type="button" data-i="${i}" aria-label="Remove ${tag}">×</button>`;
-      chip.querySelector('button').addEventListener('click', function () {
+      chip.appendChild(document.createTextNode(`${tag} `));
+      const removeButton = document.createElement('button');
+      removeButton.type = 'button';
+      removeButton.dataset.i = String(i);
+      removeButton.setAttribute('aria-label', `Remove ${tag}`);
+      removeButton.textContent = '×';
+      removeButton.addEventListener('click', function () {
         tags.splice(parseInt(this.dataset.i), 1);
         render();
       });
+      chip.appendChild(removeButton);
       display.appendChild(chip);
     });
     hidden.value = tags.join(', ');

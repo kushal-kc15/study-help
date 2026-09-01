@@ -2,6 +2,7 @@ import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from .models import Room, Message, User, Notification, DirectMessage
+from .sanitization import sanitize_markdown_source
 
 # Global in-memory set of online user IDs (works with InMemoryChannelLayer)
 ONLINE_USERS = set()
@@ -49,13 +50,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
         if not body:
             return
 
-        await self.save_message(user, self.room_id, body)
+        message = await self.save_message(user, self.room_id, body)
 
         await self.channel_layer.group_send(
             self.room_group_name,
             {
                 'type': 'chat_message',
-                'body': body,
+                'body': sanitize_markdown_source(message.body),
                 'username': user.username,
                 'avatar_url': await self.get_avatar_url(user),
                 'user_id': user.id,
@@ -66,7 +67,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
     async def chat_message(self, event):
         await self.send(text_data=json.dumps({
             'type': 'message',
-            'body': event['body'],
+            'body': sanitize_markdown_source(event['body']),
             'username': event['username'],
             'avatar_url': event['avatar_url'],
             'user_id': event['user_id'],
@@ -136,7 +137,7 @@ class DMConsumer(AsyncWebsocketConsumer):
             self.room_group_name,
             {
                 'type': 'dm_message',
-                'body': body,
+                'body': sanitize_markdown_source(dm.body),
                 'sender_id': user.id,
                 'username': user.username,
                 'avatar_url': avatar_url,
@@ -146,7 +147,7 @@ class DMConsumer(AsyncWebsocketConsumer):
 
     async def dm_message(self, event):
         await self.send(text_data=json.dumps({
-            'body': event['body'],
+            'body': sanitize_markdown_source(event['body']),
             'sender_id': event['sender_id'],
             'username': event['username'],
             'avatar_url': event['avatar_url'],

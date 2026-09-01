@@ -9,6 +9,7 @@ from django.core.mail import send_mail
 from django.conf import settings as django_settings
 from .models import Room, Topic, Message, User, Notification, DirectMessage, RoomFile, MessageReaction
 from .forms import RoomForm, UserForm, RegisterForm
+from .sanitization import sanitize_markdown_source
 
 
 # Create your views here.
@@ -421,7 +422,7 @@ def search_room_messages(request, pk):
     qs = room.message_set.filter(body__icontains=q).select_related('user')[:50]
     results = [{
         'id': m.id,
-        'body': m.body,
+        'body': sanitize_markdown_source(m.body),
         'username': m.user.username,
         'avatar_url': m.user.avatar.url if m.user.avatar else '/media/avatar.svg',
         'user_id': m.user.id,
@@ -439,7 +440,7 @@ def room_messages_api(request, pk):
     msgs = qs[:20]
     data = [{
         'id': m.id,
-        'body': m.body,
+        'body': sanitize_markdown_source(m.body),
         'username': m.user.username,
         'avatar_url': m.user.avatar.url if m.user.avatar else '/media/avatar.svg',
         'user_id': m.user.id,
@@ -557,7 +558,11 @@ def pin_message(request, room_pk, msg_pk):
         room.pinned_message = message
         pinned = True
     room.save(update_fields=['pinned_message'])
-    return JsonResponse({'pinned': pinned, 'msg_id': msg_pk, 'body': message.body[:100]})
+    return JsonResponse({
+        'pinned': pinned,
+        'msg_id': msg_pk,
+        'body': sanitize_markdown_source(message.body[:100]),
+    })
 
 
 @login_required(login_url='login')
@@ -645,7 +650,7 @@ def send_room_message(request, pk):
     ])
     return JsonResponse({
         'id': message.id,
-        'body': message.body,
+        'body': sanitize_markdown_source(message.body),
         'username': request.user.username,
         'avatar_url': request.user.avatar.url if request.user.avatar else '/static/images/avatar.svg',
         'user_id': request.user.id,
@@ -662,7 +667,7 @@ def poll_room_messages(request, pk):
     msgs = room.message_set.filter(id__gt=after_id).select_related('user')
     data = [{
         'id': m.id,
-        'body': m.body,
+        'body': sanitize_markdown_source(m.body),
         'username': m.user.username,
         'avatar_url': m.user.avatar.url if m.user.avatar else '/static/images/avatar.svg',
         'user_id': m.user.id,
@@ -688,7 +693,7 @@ def send_dm_message(request, user_id):
     )
     return JsonResponse({
         'id': dm.id,
-        'body': dm.body,
+        'body': sanitize_markdown_source(dm.body),
         'sender_id': request.user.id,
         'username': request.user.username,
         'avatar_url': request.user.avatar.url if request.user.avatar else '/static/images/avatar.svg',
@@ -710,7 +715,7 @@ def poll_dm_messages(request, user_id):
     msgs.filter(recipient=me, is_read=False).update(is_read=True)
     data = [{
         'id': m.id,
-        'body': m.body,
+        'body': sanitize_markdown_source(m.body),
         'sender_id': m.sender.id,
         'username': m.sender.username,
         'avatar_url': m.sender.avatar.url if m.sender.avatar else '/static/images/avatar.svg',

@@ -1,9 +1,8 @@
 // Markdown rendering for server-rendered messages
 document.addEventListener('DOMContentLoaded', function () {
-  if (typeof marked === 'undefined') return;
-  marked.setOptions({ breaks: true, gfm: true });
+  if (typeof StudyHelpMarkdown === 'undefined') return;
   document.querySelectorAll('[data-raw]').forEach(el => {
-    el.innerHTML = marked.parse(el.dataset.raw);
+    StudyHelpMarkdown.renderInto(el, el.dataset.raw);
   });
 });
 

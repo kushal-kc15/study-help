@@ -7,6 +7,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.mail import send_mail
 from django.conf import settings as django_settings
+from .access import is_room_member, is_room_muted
 from .models import Room, Topic, Message, User, Notification, DirectMessage, RoomFile, MessageReaction
 from .forms import RoomForm, UserForm, RegisterForm
 from .sanitization import sanitize_markdown_source
@@ -219,13 +220,11 @@ def room(request,pk):
     room=get_object_or_404(Room, id=pk)
     room_messages=room.message_set.all()
     participants=room.participants.all()
-    is_participant = request.user.is_authenticated and (
-        room.participants.filter(id=request.user.id).exists() or room.host == request.user
-    )
+    is_participant = is_room_member(request.user, room)
     if request.method=='POST':
         if not is_participant:
             return redirect('room', pk=room.id)
-        if room.muted_users.filter(id=request.user.id).exists():
+        if is_room_muted(request.user, room):
             messages.error(request, 'You are muted in this room.')
             return redirect('room', pk=room.id)
         message=Message.objects.create(
@@ -246,7 +245,7 @@ def room(request,pk):
         return redirect('room',pk=room.id)
     room_files = room.files.all()
     emojis = MessageReaction.EMOJIS
-    is_muted = request.user.is_authenticated and room.muted_users.filter(id=request.user.id).exists()
+    is_muted = is_room_muted(request.user, room)
     context={
         'room': room,
         'room_messages': room_messages,
@@ -629,10 +628,10 @@ def send_room_message(request, pk):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
     room = get_object_or_404(Room, id=pk)
-    is_participant = room.participants.filter(id=request.user.id).exists() or room.host == request.user
+    is_participant = is_room_member(request.user, room)
     if not is_participant:
         return JsonResponse({'error': 'Not a participant'}, status=403)
-    if room.muted_users.filter(id=request.user.id).exists():
+    if is_room_muted(request.user, room):
         return JsonResponse({'error': 'You are muted'}, status=403)
     body = request.POST.get('body', '').strip()
     if not body:

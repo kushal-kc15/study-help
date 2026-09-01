@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from django.template import Context, Template
@@ -144,9 +145,15 @@ class RenderedMarkdownSanitizationTests(SimpleTestCase):
 class WebSocketSanitizationTests(SimpleTestCase):
     async def test_room_websocket_sanitizes_message_body_before_sending(self):
         consumer = ChatConsumer()
+        consumer.scope = {
+            'user': SimpleNamespace(pk=1, is_authenticated=True),
+        }
+        consumer.room_id = 10
+        consumer.connection_still_authorized = AsyncMock(return_value=True)
         consumer.send = AsyncMock()
 
         await consumer.chat_message({
+            'room_id': 10,
             'body': '**safe** <img src=x onerror=alert(1)>',
             'username': 'student',
             'avatar_url': '/media/avatar.svg',
@@ -159,6 +166,15 @@ class WebSocketSanitizationTests(SimpleTestCase):
 
     async def test_dm_websocket_sanitizes_message_body_before_sending(self):
         consumer = DMConsumer()
+        consumer.scope = {
+            'user': SimpleNamespace(pk=1, is_authenticated=True),
+        }
+        consumer.other_user_id = 2
+        consumer.participant_ids = (1, 2)
+        consumer.get_dm_access = AsyncMock(return_value={
+            'status': 'ok',
+            'participant_ids': [1, 2],
+        })
         consumer.send = AsyncMock()
 
         await consumer.dm_message({
@@ -167,6 +183,7 @@ class WebSocketSanitizationTests(SimpleTestCase):
             'username': 'student',
             'avatar_url': '/media/avatar.svg',
             'timestamp': 'just now',
+            'participant_ids': [1, 2],
         })
 
         payload = json.loads(consumer.send.await_args.kwargs['text_data'])

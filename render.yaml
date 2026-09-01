@@ -11,34 +11,11 @@ services:
         value: "False"
       - key: ALLOWED_HOSTS
         value: ".onrender.com"
-      - key: DB_NAME
-        fromDatabase:
-          name: studyhelp-db
-          property: database
-      - key: DB_USER
-        fromDatabase:
-          name: studyhelp-db
-          property: user
-      - key: DB_PASSWORD
-        fromDatabase:
-          name: studyhelp-db
-          property: password
-      - key: DB_HOST
-        fromDatabase:
-          name: studyhelp-db
-          property: host
-      - key: DB_PORT
-        fromDatabase:
-          name: studyhelp-db
-          property: port
+      - key: DATABASE_URL
+        sync: false
       - key: GOOGLE_OAUTH2_KEY
         sync: false
       - key: GOOGLE_OAUTH2_SECRET
         sync: false
       - key: SOCIAL_AUTH_REDIRECT_IS_HTTPS
         value: "True"
-
-databases:
-  - name: studyhelp-db
-    databaseName: studyhelp
-    user: studyhelp

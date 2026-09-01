@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 import os
 import dj_database_url
 from pathlib import Path
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -92,34 +93,37 @@ WSGI_APPLICATION = 'studyhelp.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-# Use DATABASE_URL if available (for production), otherwise fall back to individual DB_* variables
-if os.environ.get('DATABASE_URL'):
-    DATABASES = {
-        'default': dj_database_url.config(
-            default=os.environ.get('DATABASE_URL'),
-            conn_max_age=0,
-            ssl_require=True
-        )
-    }
-elif os.environ.get('DB_NAME'):
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.environ.get('DB_NAME', 'studyhelp'),
-            'USER': os.environ.get('DB_USER', 'postgres'),
-            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-            'HOST': os.environ.get('DB_HOST', 'localhost'),
-            'PORT': os.environ.get('DB_PORT', '5432'),
-            'CONN_MAX_AGE': 0,  # Reuse connections for 10 minutes
-        }
-    }
-else:
+DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
+
+if DEBUG and not DATABASE_URL:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
+else:
+    if not DATABASE_URL:
+        raise ImproperlyConfigured(
+            'DATABASE_URL is required when DEBUG=False.'
+        )
+
+    try:
+        production_database = dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+            ssl_require=not DEBUG,
+        )
+    except (KeyError, ValueError):
+        raise ImproperlyConfigured('DATABASE_URL is invalid.') from None
+
+    if not DEBUG and production_database.get('ENGINE') != 'django.db.backends.postgresql':
+        raise ImproperlyConfigured(
+            'DATABASE_URL must use PostgreSQL when DEBUG=False.'
+        )
+
+    DATABASES = {'default': production_database}
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators

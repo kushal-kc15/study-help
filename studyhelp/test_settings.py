@@ -1,4 +1,10 @@
-from .settings import *  # noqa: F403
+import os
+
+
+os.environ['DEBUG'] = 'True'
+os.environ['DATABASE_URL'] = ''
+
+from .settings import *  # noqa: E402,F403
 
 
 SECRET_KEY = 'test-only-secret-key'

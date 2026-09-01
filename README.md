@@ -43,7 +43,7 @@ A real-time collaborative study platform where students find study rooms, join d
 | Auth | Django auth + Social Auth (Google OAuth2) |
 | Frontend | Vanilla JS, CSS custom properties, marked.js (Markdown) |
 | Static files | WhiteNoise |
-| Deployment | Render |
+| Deployment | DigitalOcean (planned) |
 
 ---
 
@@ -75,12 +75,8 @@ SECRET_KEY=your-secret-key-here
 DEBUG=True
 ALLOWED_HOSTS=localhost,127.0.0.1
 
-# Leave these out to use SQLite locally
-# DB_NAME=studyhelp
-# DB_USER=postgres
-# DB_PASSWORD=yourpassword
-# DB_HOST=localhost
-# DB_PORT=5432
+# Omit or leave empty to use SQLite locally when DEBUG=True
+DATABASE_URL=
 
 # Google OAuth (optional for local dev)
 GOOGLE_OAUTH2_KEY=your-google-client-id
@@ -108,20 +104,15 @@ Visit `http://localhost:8000`
 
 ---
 
-## Deployment (Render)
+## Production Database
 
-This project includes a `render.yaml` blueprint for one-click deployment.
+Production uses PostgreSQL through a provider-neutral `DATABASE_URL`. When
+`DEBUG=False`, the setting is mandatory and must use a PostgreSQL URL. Local
+development continues to use SQLite when `DEBUG=True` and `DATABASE_URL` is
+empty.
 
-1. Push your code to GitHub
-2. Go to [render.com](https://render.com) → New → **Blueprint**
-3. Connect your GitHub repo — Render will auto-configure the web service and PostgreSQL database
-4. Set these environment variables manually in the Render dashboard:
-   - `GOOGLE_OAUTH2_KEY`
-   - `GOOGLE_OAUTH2_SECRET`
-5. Update your Google OAuth Console with the Render callback URL:
-   ```
-   https://your-app.onrender.com/social-auth/complete/google-oauth2/
-   ```
+Supply the production connection string through the hosting provider's
+environment-variable or secrets interface. Do not commit it to the repository.
 
 ---
 
@@ -132,11 +123,7 @@ This project includes a `render.yaml` blueprint for one-click deployment.
 | `SECRET_KEY` | Django secret key | Yes |
 | `DEBUG` | `True` for dev, `False` for production | Yes |
 | `ALLOWED_HOSTS` | Comma-separated list of allowed hosts | Yes |
-| `DB_NAME` | PostgreSQL database name | Production only |
-| `DB_USER` | PostgreSQL user | Production only |
-| `DB_PASSWORD` | PostgreSQL password | Production only |
-| `DB_HOST` | PostgreSQL host | Production only |
-| `DB_PORT` | PostgreSQL port (default: 5432) | Production only |
+| `DATABASE_URL` | PostgreSQL connection URL | Required when `DEBUG=False` |
 | `GOOGLE_OAUTH2_KEY` | Google OAuth2 client ID | Optional |
 | `GOOGLE_OAUTH2_SECRET` | Google OAuth2 client secret | Optional |
 
@@ -172,7 +159,7 @@ study-help/
 │   ├── main.html           # Base layout
 │   └── navbar.html
 ├── .env                    # Local env vars (not committed)
-├── render.yaml             # Render deployment config
+├── render.yaml             # Legacy Render web-service config
 ├── Procfile
 └── requirements.txt
 ```

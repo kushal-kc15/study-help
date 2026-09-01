@@ -3,7 +3,6 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.auth import views as auth_views
-from django.views.decorators.csrf import csrf_exempt
 from social_django.views import auth as _social_auth_view
 
 
@@ -17,7 +16,7 @@ urlpatterns = [
     # Google OAuth
     path(
         'social-auth/login/google-oauth2/',
-        csrf_exempt(_social_auth_view),
+        _social_auth_view,
         {'backend': 'google-oauth2'},
         name='google-oauth2-begin',
     ),

@@ -43,6 +43,9 @@
 
   {% if active_chat %}
   <div class="dm-main">
+    <form id="mark-dm-read-form" method="POST" action="{% url 'mark-dm-read' active_chat.id %}" hidden>
+      {% csrf_token %}
+    </form>
     <div class="dm-main__header">
       <div class="avatar-wrapper" data-user-id="{{active_chat.id}}">
         <div class="avatar avatar--small">
@@ -88,11 +91,24 @@
     const dmMessages = document.getElementById('dm-messages');
     const dmForm = document.getElementById('dm-form');
     const dmInput = document.getElementById('dm-input-field');
+    const markReadForm = document.getElementById('mark-dm-read-form');
+
+    function markConversationRead() {
+      return fetch(markReadForm.action, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'X-CSRFToken': markReadForm.querySelector('[name=csrfmiddlewaretoken]').value,
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+    }
 
     function scrollBottom() {
       dmMessages.scrollTop = dmMessages.scrollHeight;
     }
     scrollBottom();
+    markConversationRead();
 
     dmSocket.onmessage = function(e) {
       const data = JSON.parse(e.data);
@@ -107,6 +123,7 @@
       time.textContent = String(data.timestamp || '');
       bubble.append(body, time);
       dmMessages.appendChild(bubble);
+      if (!isMine) markConversationRead();
       scrollBottom();
     };
 

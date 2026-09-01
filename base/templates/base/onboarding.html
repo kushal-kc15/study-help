@@ -28,7 +28,10 @@
 
         <div class="onboarding-actions">
           <button type="button" class="btn btn--main" id="step1-next" disabled onclick="goToStep(2)">Continue</button>
-          <a href="{% url 'home' %}" class="btn btn--link" onclick="skipOnboarding()">Skip for now</a>
+          <form method="POST" action="{% url 'skip-onboarding' %}" style="display:inline;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn--link" style="border:0;background:none;cursor:pointer;">Skip for now</button>
+          </form>
         </div>
       </div>
 
@@ -151,10 +154,6 @@
   function goToStep(n) {
     document.querySelectorAll('.onboarding-step').forEach(s => s.style.display = 'none');
     document.getElementById('step-' + n).style.display = 'block';
-  }
-
-  function skipOnboarding() {
-    fetch('/onboarding/skip/', {method: 'POST', headers: {'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || ''}});
   }
 
   // Convert comma-separated interests to proper form inputs on submit

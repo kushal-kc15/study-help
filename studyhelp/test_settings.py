@@ -4,6 +4,7 @@ from .settings import *  # noqa: F403
 SECRET_KEY = 'test-only-secret-key'
 DEBUG = False
 ALLOWED_HOSTS = ['testserver', 'allowed.example']
+SECURE_SSL_REDIRECT = False
 
 DATABASES = {
     'default': {
@@ -15,6 +16,15 @@ DATABASES = {
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}
+
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
     },
 }
 

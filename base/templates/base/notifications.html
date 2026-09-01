@@ -2,6 +2,9 @@
 {% block content %}
 <div class="notifications-page">
   <h2 style="font-size:2rem;font-weight:700;margin-bottom:2rem;">Notifications</h2>
+  <form id="mark-notifications-read-form" method="POST" action="{% url 'mark-notifications-read' %}" hidden>
+    {% csrf_token %}
+  </form>
 
   {% if notifications %}
     {% for notification in notifications %}
@@ -26,4 +29,23 @@
     </div>
   {% endif %}
 </div>
+<script>
+  (function() {
+    const form = document.getElementById('mark-notifications-read-form');
+    fetch(form.action, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value,
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    }).then(function(response) {
+      if (response.ok) {
+        document.querySelectorAll('.notification-item--unread').forEach(function(item) {
+          item.classList.remove('notification-item--unread');
+        });
+      }
+    });
+  }());
+</script>
 {% endblock %}

@@ -1,0 +1,20 @@
+{% extends 'main.html' %}
+{% block content %}
+<main class="auth layout">
+  <div class="container">
+    <div class="layout__box">
+      <div class="layout__body">
+        <h2>{{ title }}</h2>
+        <p>{{ prompt }}</p>
+        <form method="POST">
+          {% csrf_token %}
+          <div style="display:flex;gap:1rem;margin-top:2rem;">
+            <a href="{{ cancel_url }}" class="btn btn--dark">Cancel</a>
+            <button type="submit" class="btn btn--main">{{ action_label }}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</main>
+{% endblock %}

@@ -7,6 +7,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.mail import send_mail
 from django.conf import settings as django_settings
+from django.views.decorators.http import require_POST
 from .access import is_room_member, is_room_muted
 from .models import Room, Topic, Message, User, Notification, DirectMessage, RoomFile, MessageReaction
 from .forms import RoomForm, UserForm, RegisterForm
@@ -31,8 +32,6 @@ def loginpage(request):
             messages.error(request, 'invalid email or password')
     context={'page':page}
     return render(request, 'base/login_register.html',context)
-
-from django.views.decorators.http import require_POST
 
 @require_POST
 def logoutpage(request):
@@ -92,10 +91,10 @@ def onboarding(request):
 
 
 @login_required(login_url='login')
+@require_POST
 def skip_onboarding(request):
-    if request.method == 'POST':
-        request.user.onboarding_complete = True
-        request.user.save(update_fields=['onboarding_complete'])
+    request.user.onboarding_complete = True
+    request.user.save(update_fields=['onboarding_complete'])
     return redirect('home')
 
 
@@ -121,6 +120,13 @@ def _send_verification_email(request, user):
 
 def verify_email(request, token):
     user = get_object_or_404(User, email_verification_token=token)
+    if request.method != 'POST':
+        return render(request, 'base/action_confirm.html', {
+            'title': 'Verify your email',
+            'prompt': f'Confirm verification for {user.email}.',
+            'action_label': 'Verify email',
+            'cancel_url': '/',
+        })
     if not user.is_email_verified:
         user.is_email_verified = True
         user.save(update_fields=['is_email_verified'])
@@ -131,6 +137,7 @@ def verify_email(request, token):
 
 
 @login_required(login_url='login')
+@require_POST
 def resend_verification(request):
     if request.user.is_email_verified:
         messages.info(request, 'Your email is already verified.')
@@ -308,7 +315,7 @@ def UpdateRoom(request, pk):
 def DeleteRoom(request,pk):
     room=get_object_or_404(Room, id=pk)
     if request.user!=room.host :
-        return HttpResponse('You are not authorized to delete this room')
+        return HttpResponse('You are not authorized to delete this room', status=403)
     if request.method == 'POST':
         room.delete()
         return redirect('home')
@@ -318,7 +325,7 @@ def DeleteRoom(request,pk):
 def DeleteMessage(request,pk):
     message=get_object_or_404(Message, id=pk)
     if request.user!=message.user :
-        return HttpResponse('You are not authorized to delete this room')
+        return HttpResponse('You are not authorized to delete this message', status=403)
     
     if request.method == 'POST':
         message.delete()
@@ -368,15 +375,23 @@ def activitypage(request):
 @login_required(login_url='login')
 def notifications_page(request):
     notifications = request.user.notifications.all()[:50]
-    unread = request.user.notifications.filter(is_read=False)
-    unread.update(is_read=True)
     return render(request, 'base/notifications.html', {'notifications': notifications})
 
 
 @login_required(login_url='login')
+@require_POST
+def mark_notifications_read(request):
+    updated = request.user.notifications.filter(is_read=False).update(is_read=True)
+    return JsonResponse({'marked_read': updated})
+
+
+@login_required(login_url='login')
+@require_POST
 def upload_room_file(request, pk):
     room = get_object_or_404(Room, id=pk)
-    if request.method == 'POST' and request.FILES.get('file'):
+    if not is_room_member(request.user, room):
+        return HttpResponse('You are not authorized to upload files to this room', status=403)
+    if request.FILES.get('file'):
         f = request.FILES['file']
         RoomFile.objects.create(
             room=room,
@@ -388,12 +403,14 @@ def upload_room_file(request, pk):
 
 
 @login_required(login_url='login')
+@require_POST
 def delete_room_file(request, pk):
     room_file = get_object_or_404(RoomFile, id=pk)
     room_id = room_file.room.id
-    if request.user == room_file.uploaded_by or request.user == room_file.room.host:
-        room_file.file.delete(save=False)
-        room_file.delete()
+    if request.user != room_file.uploaded_by and request.user != room_file.room.host:
+        return HttpResponse('You are not authorized to delete this file', status=403)
+    room_file.file.delete(save=False)
+    room_file.delete()
     return redirect('room', pk=room_id)
 
 
@@ -467,10 +484,11 @@ def room_reactions(request, pk):
 
 
 @login_required(login_url='login')
+@require_POST
 def toggle_reaction(request, pk):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'POST required'}, status=405)
     message = get_object_or_404(Message, id=pk)
+    if not is_room_member(request.user, message.room):
+        return JsonResponse({'error': 'Not a participant'}, status=403)
     emoji = request.POST.get('emoji', '')
     if emoji not in MessageReaction.EMOJIS:
         return JsonResponse({'error': 'Invalid emoji'}, status=400)
@@ -489,24 +507,31 @@ def toggle_reaction(request, pk):
 
 
 @login_required(login_url='login')
+@require_POST
 def join_room(request, pk):
     room = get_object_or_404(Room, id=pk)
-    if request.method == 'POST':
-        room.participants.add(request.user)
+    room.participants.add(request.user)
     return redirect('room', pk=room.id)
 
 
 def join_via_invite(request, token):
     room = get_object_or_404(Room, invite_token=token)
-    if request.user.is_authenticated:
-        room.participants.add(request.user)
-    else:
+    if not request.user.is_authenticated:
         messages.info(request, 'Please log in to join this room.')
         return redirect(f'/login?next=/invite/{token}/')
+    if request.method != 'POST':
+        return render(request, 'base/action_confirm.html', {
+            'title': 'Join study room',
+            'prompt': f'Join “{room.name}”?',
+            'action_label': 'Join room',
+            'cancel_url': f'/room/{room.id}/',
+        })
+    room.participants.add(request.user)
     return redirect('room', pk=room.id)
 
 
 @login_required(login_url='login')
+@require_POST
 def regenerate_invite(request, pk):
     room = get_object_or_404(Room, id=pk)
     if request.user != room.host:
@@ -519,11 +544,14 @@ def regenerate_invite(request, pk):
 
 
 @login_required(login_url='login')
+@require_POST
 def mute_user(request, room_pk, user_pk):
     room = get_object_or_404(Room, id=room_pk)
     if request.user != room.host:
         return JsonResponse({'error': 'Not authorized'}, status=403)
     target = get_object_or_404(User, id=user_pk)
+    if target == room.host or not room.participants.filter(id=target.id).exists():
+        return JsonResponse({'error': 'User is not a mutable room participant'}, status=403)
     if room.muted_users.filter(id=user_pk).exists():
         room.muted_users.remove(target)
         muted = False
@@ -534,17 +562,21 @@ def mute_user(request, room_pk, user_pk):
 
 
 @login_required(login_url='login')
+@require_POST
 def kick_user(request, room_pk, user_pk):
     room = get_object_or_404(Room, id=room_pk)
     if request.user != room.host:
         return JsonResponse({'error': 'Not authorized'}, status=403)
     target = get_object_or_404(User, id=user_pk)
+    if target == room.host or not room.participants.filter(id=target.id).exists():
+        return JsonResponse({'error': 'User is not a removable room participant'}, status=403)
     room.participants.remove(target)
-    room.muted_users.discard(target)
+    room.muted_users.remove(target)
     return JsonResponse({'kicked': True, 'user_id': user_pk})
 
 
 @login_required(login_url='login')
+@require_POST
 def pin_message(request, room_pk, msg_pk):
     room = get_object_or_404(Room, id=room_pk)
     if request.user != room.host:
@@ -565,6 +597,7 @@ def pin_message(request, room_pk, msg_pk):
 
 
 @login_required(login_url='login')
+@require_POST
 def toggle_bookmark(request, pk):
     room = get_object_or_404(Room, id=pk)
     if room.bookmarked_by.filter(id=request.user.id).exists():
@@ -616,7 +649,6 @@ def inbox(request, user_id=None):
         dm_messages = DirectMessage.objects.filter(
             Q(sender=me, recipient=other) | Q(sender=other, recipient=me)
         )
-        dm_messages.filter(recipient=me, is_read=False).update(is_read=True)
         context['active_chat'] = other
         context['dm_messages'] = dm_messages
 
@@ -624,9 +656,20 @@ def inbox(request, user_id=None):
 
 
 @login_required(login_url='login')
+@require_POST
+def mark_dm_read(request, user_id):
+    other = get_object_or_404(User, id=user_id)
+    updated = DirectMessage.objects.filter(
+        sender=other,
+        recipient=request.user,
+        is_read=False,
+    ).update(is_read=True)
+    return JsonResponse({'marked_read': updated})
+
+
+@login_required(login_url='login')
+@require_POST
 def send_room_message(request, pk):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'POST required'}, status=405)
     room = get_object_or_404(Room, id=pk)
     is_participant = is_room_member(request.user, room)
     if not is_participant:
@@ -676,9 +719,8 @@ def poll_room_messages(request, pk):
 
 
 @login_required(login_url='login')
+@require_POST
 def send_dm_message(request, user_id):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'POST required'}, status=405)
     other = get_object_or_404(User, id=user_id)
     body = request.POST.get('body', '').strip()
     if not body:
@@ -711,7 +753,6 @@ def poll_dm_messages(request, user_id):
         Q(sender=me, recipient=other) | Q(sender=other, recipient=me),
         id__gt=after_id
     ).select_related('sender')
-    msgs.filter(recipient=me, is_read=False).update(is_read=True)
     data = [{
         'id': m.id,
         'body': sanitize_markdown_source(m.body),
